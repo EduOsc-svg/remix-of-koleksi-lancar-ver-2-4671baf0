@@ -300,9 +300,9 @@ export function PrintCoupon8x5({ coupons, contract }: PrintCoupon8x5Props) {
   const couponPages = groupCouponsIntoPages(coupons);
 
   // Constants
-  const REKENING_NUMBER = "0082-0100-3537-567";
-  const KANTOR_NUMBER = "0821 8802 0656";
-  const BG_IMAGE_URL = "https://uploads.onecompiler.io/3zcmc9fyy/448fk8uyf/Background%20WM%20SME2.jpg";
+  const REKENING_NUMBER = "7052-0101-4075-532";
+  const KANTOR_NUMBER = "0852 5882 5882";
+  const BG_IMAGE_URL = "https://uploads.onecompiler.io/3zcmc9fyy/448fk8uyf/Desain_tanpa_judul__2_-removebg.png";
   
   // State untuk handle image loading
   const [imageLoaded, setImageLoaded] = React.useState(false);
@@ -489,7 +489,7 @@ export function PrintCoupon8x5({ coupons, contract }: PrintCoupon8x5Props) {
               <span style={{ fontWeight: 'bold' }} className="label">Rekening BRI({REKENING_NUMBER})</span>
             </div>
             <div className="data-row">
-              <span className="label">A.N SUMBER MUTIARA ELEKTRONIK</span>
+              <span className="label">A.N CV MAHKOTA JAYA</span>
             </div>
 
                     </div>

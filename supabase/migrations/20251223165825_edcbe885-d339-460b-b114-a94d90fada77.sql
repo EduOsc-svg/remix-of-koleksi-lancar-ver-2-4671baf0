@@ -58,7 +58,7 @@ ON public.installment_coupons FOR DELETE USING (true);
 ALTER TABLE public.payment_logs 
 ADD COLUMN coupon_id UUID REFERENCES public.installment_coupons(id);
 
--- Create function to generate holiday-aware coupons
+-- Create function to generate holiday-aware coupons (idempotent)
 CREATE OR REPLACE FUNCTION public.generate_installment_coupons(
   p_contract_id UUID,
   p_start_date DATE,
@@ -75,23 +75,22 @@ DECLARE
   v_coupon_index INTEGER := 1;
   v_holidays DATE[];
 BEGIN
-  -- Fetch all holiday dates into an array
+  -- Fetch holiday dates into an array
   SELECT ARRAY_AGG(holiday_date) INTO v_holidays FROM public.holidays;
-  
-  -- If no holidays, initialize as empty array
   IF v_holidays IS NULL THEN
     v_holidays := ARRAY[]::DATE[];
   END IF;
-  
-  -- Generate coupons respecting holidays
+
+  -- Make operation idempotent: remove any existing coupons for this contract
+  DELETE FROM public.installment_coupons WHERE contract_id = p_contract_id;
+
+  -- Generate coupons respecting holidays. Use ON CONFLICT DO NOTHING as extra safety.
   WHILE v_coupon_index <= p_tenor_days LOOP
-    -- Skip if current date is a holiday
     IF v_current_date = ANY(v_holidays) THEN
       v_current_date := v_current_date + INTERVAL '1 day';
       CONTINUE;
     END IF;
-    
-    -- Insert the coupon
+
     INSERT INTO public.installment_coupons (
       contract_id,
       installment_index,
@@ -104,11 +103,15 @@ BEGIN
       v_current_date,
       p_daily_amount,
       'unpaid'
-    );
-    
+    ) ON CONFLICT (contract_id, installment_index) DO NOTHING;
+
     v_coupon_index := v_coupon_index + 1;
     v_current_date := v_current_date + INTERVAL '1 day';
   END LOOP;
+EXCEPTION WHEN OTHERS THEN
+  -- Helpful debug notice to surface errors in logs; re-raise to let caller see the error
+  RAISE NOTICE 'generate_installment_coupons failed for contract %: %', p_contract_id, SQLERRM;
+  RAISE;
 END;
 $$;
 

@@ -43,7 +43,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { TablePagination } from "@/components/TablePagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useTotalCommissionPaid } from "@/hooks/useCommissionPayments";
 import { format, startOfMonth, addMonths, subMonths } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { StatCard } from "@/components/dashboard/StatCard";
@@ -108,7 +108,7 @@ export default function Dashboard() {
   const { data: dpMonthly } = useDpTotalMonthly(selectedMonth);
   const { data: dpYearly } = useDpTotalYearly(selectedYear);
   const { promptAdminNote } = useAdminNote();
-  const [commissionSource, setCommissionSource] = useState<'12b' | '0.8'>('12b');
+  
   
   // Pagination for sales agent performance table
   const AGENTS_PER_PAGE = 10;
@@ -222,11 +222,13 @@ export default function Dashboard() {
   // Keuntungan bersih tahunan: gross profit − (pilihan komisi) − biaya operasional (ex. gaji) − gaji kolektor
   const yearlyNetProfit = useMemo(() => {
     const profit = yearlyFinancial?.total_profit ?? 0;
-    const commissionToUse = commissionSource === '12b' ? yearlyCommissionTotal : yearlyBonusCommission;
+    let commissionToUse = yearlyBonusCommission;
+    if (commissionSource === '12b') commissionToUse = yearlyCommissionTotal;
+    if (commissionSource === 'paid') commissionToUse = totalCommissionPaid ?? yearlyCommissionTotal;
     const collector = yearlyOpCollectorSalaryTotal || collectorSalaryTotalYearly || 0;
     const opsExcl = yearlyOperationalExclSalaries || 0;
     return profit - commissionToUse - opsExcl - collector;
-  }, [yearlyFinancial?.total_profit, yearlyCommissionTotal, yearlyBonusCommission, commissionSource, yearlyOpCollectorSalaryTotal, collectorSalaryTotalYearly, yearlyOperationalExclSalaries]);
+  }, [yearlyFinancial?.total_profit, yearlyCommissionTotal, yearlyBonusCommission, commissionSource, totalCommissionPaid, yearlyOpCollectorSalaryTotal, collectorSalaryTotalYearly, yearlyOperationalExclSalaries]);
 
   const locale = i18n.language === 'id' ? 'id-ID' : 'en-US';
 
@@ -672,6 +674,7 @@ export default function Dashboard() {
                 <ToggleGroup type="single" value={commissionSource} onValueChange={(v) => v && setCommissionSource(v as any)} className="bg-slate-100 p-1 rounded-lg">
                   <ToggleGroupItem value="12b" className="text-xs px-3 py-1 data-[state=on]:bg-white data-[state=on]:shadow-sm rounded-md">Komisi 12B</ToggleGroupItem>
                   <ToggleGroupItem value="0.8" className="text-xs px-3 py-1 data-[state=on]:bg-white data-[state=on]:shadow-sm rounded-md">Komisi 0.8%</ToggleGroupItem>
+                  <ToggleGroupItem value="paid" className="text-xs px-3 py-1 data-[state=on]:bg-white data-[state=on]:shadow-sm rounded-md">Komisi Dibayar</ToggleGroupItem>
                 </ToggleGroup>
               </div>
               <Select
@@ -767,16 +770,6 @@ export default function Dashboard() {
                   valueColor="text-purple-600"
                   subtitle={`Total komisi 12 bulan (${selectedYear.getFullYear()})`}
                   hoverInfo={`Total komisi yang dihitung untuk periode tahun ${selectedYear.getFullYear()} (12 bulan). Jika sumber komisi diset ke 'paid', menampilkan jumlah komisi yang sudah dibayarkan.`}
-                />
-
-                <StatCard
-                  icon={Percent}
-                  iconColor="text-violet-400"
-                  label="Komisi 0.8%"
-                  value={(yearlyFinancial?.total_omset ?? 0) * (YEARLY_BONUS_PERCENTAGE / 100)}
-                  valueColor="text-purple-600"
-                  subtitle={`0.8% × Omset ${selectedYear.getFullYear()}`}
-                  hoverInfo={`Komisi yang dihitung sebagai ${YEARLY_BONUS_PERCENTAGE}% × Total Omset tahun ${selectedYear.getFullYear()}.`}
                 />
 
                 <StatCard

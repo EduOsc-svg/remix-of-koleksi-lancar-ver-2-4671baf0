@@ -194,11 +194,16 @@ export default function Dashboard() {
   // Komisi tahunan (12 bulan): gunakan nilai authoritative dari yearlyFinancial jika tersedia
   // Ini merepresentasikan total komisi selama 12 bulan untuk periode tahun terpilih.
   const yearlyCommissionTotal = useMemo(() => {
+    // Prefer summing the monthly breakdown commission values (Jan..Dec)
+    const monthly = yearlyFinancial?.monthly_breakdown;
+    if (monthly && Array.isArray(monthly) && monthly.length > 0) {
+      return monthly.reduce((s, m) => s + (m.commission || 0), 0);
+    }
+    // Fallback to any authoritative total_commission field if present
     const fromSummary = yearlyFinancial?.total_commission;
     if (typeof fromSummary === 'number') return fromSummary;
-    const omset = yearlyFinancial?.total_omset ?? 0;
-    return (omset * YEARLY_BONUS_PERCENTAGE) / 100;
-  }, [yearlyFinancial?.total_commission, yearlyFinancial?.total_omset]);
+    return 0;
+  }, [yearlyFinancial?.monthly_breakdown, yearlyFinancial?.total_commission]);
 
   // Komisi yang dihitung dari persentase (0.8% × total omset)
   const yearlyBonusCommission = useMemo(() => {

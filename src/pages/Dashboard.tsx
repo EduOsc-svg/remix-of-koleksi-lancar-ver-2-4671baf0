@@ -5,6 +5,7 @@ import { useMonthlyPerformance, useYearlyTarget } from "@/hooks/useMonthlyPerfor
 import { useYearlyFinancialSummary } from "@/hooks/useYearlyFinancialSummary";
 import { useContracts } from '@/hooks/useContracts';
 import { useOperationalExpenses, useOperationalExpenseMutations, OperationalExpenseInput } from "@/hooks/useOperationalExpenses";
+import { useOperationalExpenseTotals, useOperationalExpenseTotalsYearly } from '@/hooks/useOperationalExpenseTotals';
 import { useAgentContractHistory } from "@/hooks/useAgentPerformance";
 import { formatRupiah } from "@/lib/format";
 import { exportYearlyReportToExcel } from "@/lib/exportYearlyReport";
@@ -41,6 +42,8 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { usePagination } from "@/hooks/usePagination";
 import { TablePagination } from "@/components/TablePagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, startOfMonth, addMonths, subMonths } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { StatCard } from "@/components/dashboard/StatCard";
@@ -83,6 +86,7 @@ export default function Dashboard() {
   const { data: yearlyData, isLoading: isLoadingYearly } = useYearlyTarget(selectedYear);
   const { data: yearlyFinancial, isLoading: isLoadingYearlyFinancial } = useYearlyFinancialSummary(selectedYear);
   const { data: expenses, isLoading: isLoadingExpenses } = useOperationalExpenses(selectedMonth);
+  const { total: opTotal, collectorSalaryTotal: opCollectorSalaryTotal, operationalExclSalaries } = useOperationalExpenseTotals(selectedMonth);
   const { data: historyData, isLoading: isLoadingHistory } = useAgentContractHistory(selectedAgent?.id || null);
   const { data: returnedLoss } = useReturnedLoss(selectedMonth);
   const { data: returnedLossYearly } = useReturnedLossYearly(selectedYear);
@@ -92,12 +96,19 @@ export default function Dashboard() {
   const { data: outstandingYearly } = useOutstandingDetailsYearly(selectedYear);
   const { data: omsetMonthly } = useOmsetDetailsMonthly(selectedMonth);
   const { data: omsetYearly } = useOmsetDetailsYearly(selectedYear);
+  const [commissionSource, setCommissionSource] = useState<'12b' | '0.8' | 'paid'>('12b');
   const { createExpense, deleteExpense } = useOperationalExpenseMutations();
   const collectorSalaryTotal = useCollectorSalaryTotal(selectedMonth);
   const collectorSalaryTotalYearly = useCollectorSalaryTotalYearly(selectedYear);
+  // total commission paid (actual payments) for the selected year
+  const yearStartStr = format(startOfMonth(new Date(selectedYear.getFullYear(), 0, 1)), 'yyyy-MM-dd');
+  const yearEndStr = format(startOfMonth(new Date(selectedYear.getFullYear(), 11, 31)), 'yyyy-MM-dd');
+  const { data: totalCommissionPaid } = useTotalCommissionPaid(yearStartStr, yearEndStr as string);
+  const { total: yearlyOpTotal, collectorSalaryTotal: yearlyOpCollectorSalaryTotal, operationalExclSalaries: yearlyOperationalExclSalaries } = useOperationalExpenseTotalsYearly(selectedYear);
   const { data: dpMonthly } = useDpTotalMonthly(selectedMonth);
   const { data: dpYearly } = useDpTotalYearly(selectedYear);
   const { promptAdminNote } = useAdminNote();
+  const [commissionSource, setCommissionSource] = useState<'12b' | '0.8'>('12b');
   
   // Pagination for sales agent performance table
   const AGENTS_PER_PAGE = 10;
@@ -162,12 +173,14 @@ export default function Dashboard() {
   // Keuntungan Kotor contract-basis: omset_full - modal_full
   const realizedProfit = useMemo(() => monthlyData?.total_profit ?? 0, [monthlyData?.total_profit]);
 
-  // Keuntungan Bersih (net): gross profit dikurangi komisi dan biaya operasional
+  // Keuntungan Bersih (net): gross profit dikurangi komisi, biaya operasional (ex. gaji), dan gaji kolektor
   const netProfit = useMemo(() => {
     const profit = monthlyData?.total_profit ?? 0;
     const commission = monthlyData?.total_commission ?? 0;
-    return profit - commission - totalExpenses;
-  }, [monthlyData?.total_profit, monthlyData?.total_commission, totalExpenses]);
+    const collector = opCollectorSalaryTotal || collectorSalaryTotal || 0;
+    const opsExcl = operationalExclSalaries || 0;
+    return profit - commission - opsExcl - collector;
+  }, [monthlyData?.total_profit, monthlyData?.total_commission, opCollectorSalaryTotal, collectorSalaryTotal, operationalExclSalaries]);
 
   // Margin keuntungan kotor: (omset - modal) / modal * 100
   const grossProfitMargin = useMemo(() => {
@@ -187,6 +200,12 @@ export default function Dashboard() {
     return (omset * YEARLY_BONUS_PERCENTAGE) / 100;
   }, [yearlyFinancial?.total_commission, yearlyFinancial?.total_omset]);
 
+  // Komisi yang dihitung dari persentase (0.8% × total omset)
+  const yearlyBonusCommission = useMemo(() => {
+    const omset = yearlyFinancial?.total_omset ?? contractTotalsYearly.total_omset ?? 0;
+    return (omset * YEARLY_BONUS_PERCENTAGE) / 100;
+  }, [yearlyFinancial?.total_omset, contractTotalsYearly.total_omset]);
+
   // Margin kotor tahunan: (omset - modal) / modal * 100
   const yearlyGrossProfitMargin = useMemo(() => {
     const modal = yearlyFinancial?.total_modal ?? 0;
@@ -195,12 +214,14 @@ export default function Dashboard() {
     return ((omset - modal) / modal) * 100;
   }, [yearlyFinancial?.total_modal, yearlyFinancial?.total_omset]);
 
-  // Keuntungan bersih tahunan: gross profit − komisi 12B − biaya operasional
+  // Keuntungan bersih tahunan: gross profit − (pilihan komisi) − biaya operasional (ex. gaji) − gaji kolektor
   const yearlyNetProfit = useMemo(() => {
     const profit = yearlyFinancial?.total_profit ?? 0;
-    const expenses = yearlyFinancial?.total_expenses ?? 0;
-    return profit - yearlyCommissionTotal - expenses;
-  }, [yearlyFinancial?.total_profit, yearlyFinancial?.total_expenses, yearlyCommissionTotal]);
+    const commissionToUse = commissionSource === '12b' ? yearlyCommissionTotal : yearlyBonusCommission;
+    const collector = yearlyOpCollectorSalaryTotal || collectorSalaryTotalYearly || 0;
+    const opsExcl = yearlyOperationalExclSalaries || 0;
+    return profit - commissionToUse - opsExcl - collector;
+  }, [yearlyFinancial?.total_profit, yearlyCommissionTotal, yearlyBonusCommission, commissionSource, yearlyOpCollectorSalaryTotal, collectorSalaryTotalYearly, yearlyOperationalExclSalaries]);
 
   const locale = i18n.language === 'id' ? 'id-ID' : 'en-US';
 
@@ -355,23 +376,23 @@ export default function Dashboard() {
         <StatCard
           icon={Settings}
           iconColor="text-orange-500"
-          label="Biaya Operasional"
-          value={totalExpenses}
+          label="Biaya Operasional (ex. Gaji)"
+          value={operationalExclSalaries}
           valueColor="text-orange-600"
           isNegative
-          subtitle="Pengeluaran bulan ini"
-          hoverInfo="Total biaya operasional yang dicatat di bulan ini (transport, komunikasi, dll)."
+          subtitle="Pengeluaran bulan ini (tidak termasuk gaji kolektor)"
+          hoverInfo="Total biaya operasional selain gaji kolektor (transport, komunikasi, dll)."
         />
 
         <StatCard
           icon={Users}
           iconColor="text-cyan-500"
           label="Gaji Kolektor"
-          value={collectorSalaryTotal}
+          value={opCollectorSalaryTotal}
           valueColor="text-cyan-600"
           isNegative
           subtitle="Total gaji bulan ini"
-          hoverInfo="Total gaji semua kolektor pada bulan ini. Sudah termasuk dalam Biaya Operasional (kategori: Gaji Kolektor)."
+          hoverInfo="Total gaji semua kolektor pada bulan ini (dipisahkan dari biaya operasional)."
         />
 
         <StatCard
@@ -642,6 +663,12 @@ export default function Dashboard() {
               <CardTitle>Kalkulasi Keuangan Tahunan</CardTitle>
             </div>
             <div className="flex items-center gap-2">
+              <div className="mr-4">
+                <ToggleGroup type="single" value={commissionSource} onValueChange={(v) => v && setCommissionSource(v as any)} className="bg-slate-100 p-1 rounded-lg">
+                  <ToggleGroupItem value="12b" className="text-xs px-3 py-1 data-[state=on]:bg-white data-[state=on]:shadow-sm rounded-md">Komisi 12B</ToggleGroupItem>
+                  <ToggleGroupItem value="0.8" className="text-xs px-3 py-1 data-[state=on]:bg-white data-[state=on]:shadow-sm rounded-md">Komisi 0.8%</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
               <Select
                 value={selectedYear.getFullYear().toString()}
                 onValueChange={(val) => setSelectedYear(new Date(parseInt(val), 0, 1))}
@@ -731,10 +758,30 @@ export default function Dashboard() {
                   icon={Percent}
                   iconColor="text-purple-500"
                   label="Komisi 12B"
-                  value={yearlyCommissionTotal}
+                  value={commissionSource === 'paid' ? (totalCommissionPaid ?? yearlyCommissionTotal) : yearlyCommissionTotal}
                   valueColor="text-purple-600"
                   subtitle={`Total komisi 12 bulan (${selectedYear.getFullYear()})`}
-                  hoverInfo={`Total komisi yang dihitung untuk periode tahun ${selectedYear.getFullYear()} (12 bulan). Jika tersedia, ini berasal dari summary (authoritative).`}
+                  hoverInfo={`Total komisi yang dihitung untuk periode tahun ${selectedYear.getFullYear()} (12 bulan). Jika sumber komisi diset ke 'paid', menampilkan jumlah komisi yang sudah dibayarkan.`}
+                />
+
+                <StatCard
+                  icon={Percent}
+                  iconColor="text-violet-400"
+                  label="Komisi 0.8%"
+                  value={(yearlyFinancial?.total_omset ?? 0) * (YEARLY_BONUS_PERCENTAGE / 100)}
+                  valueColor="text-purple-600"
+                  subtitle={`0.8% × Omset ${selectedYear.getFullYear()}`}
+                  hoverInfo={`Komisi yang dihitung sebagai ${YEARLY_BONUS_PERCENTAGE}% × Total Omset tahun ${selectedYear.getFullYear()}.`}
+                />
+
+                <StatCard
+                  icon={Percent}
+                  iconColor="text-violet-400"
+                  label="Komisi 0.8%"
+                  value={yearlyBonusCommission}
+                  valueColor="text-violet-600"
+                  subtitle={`0.8% × Omset ${selectedYear.getFullYear()}`}
+                  hoverInfo={`Komisi yang dihitung sebagai ${YEARLY_BONUS_PERCENTAGE}% × Total Omset tahun ${selectedYear.getFullYear()} (formula).`}
                 />
 
                 <StatCard
@@ -761,23 +808,23 @@ export default function Dashboard() {
                 <StatCard
                   icon={Settings}
                   iconColor="text-orange-500"
-                  label="Biaya Operasional"
-                  value={yearlyFinancial?.total_expenses ?? 0}
+                  label="Biaya Operasional (ex. Gaji)"
+                  value={yearlyOperationalExclSalaries}
                   valueColor="text-orange-600"
                   isNegative
                   subtitle={`Tahun ${selectedYear.getFullYear()}`}
-                  hoverInfo={`Total: ${formatRupiah(yearlyFinancial?.total_expenses ?? 0)} | Biaya operasional tahun ${selectedYear.getFullYear()}`}
+                  hoverInfo={`Total biaya operasional tahun ${selectedYear.getFullYear()} (tidak termasuk gaji kolektor).`}
                 />
 
                 <StatCard
                   icon={Users}
                   iconColor="text-cyan-500"
                   label="Gaji Kolektor"
-                  value={collectorSalaryTotalYearly}
+                  value={yearlyOpCollectorSalaryTotal}
                   valueColor="text-cyan-600"
                   isNegative
                   subtitle={`Total gaji tahun ${selectedYear.getFullYear()}`}
-                  hoverInfo="Total gaji semua kolektor sepanjang tahun. Sudah termasuk dalam Biaya Operasional (kategori: Gaji Kolektor)."
+                  hoverInfo="Total gaji semua kolektor sepanjang tahun (dipisahkan dari biaya operasional)."
                 />
 
                 <StatCard

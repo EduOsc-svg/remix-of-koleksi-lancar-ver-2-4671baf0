@@ -398,3 +398,18 @@ export const useCommissionSummary = (salesAgentId: string | null, periodStart?: 
     enabled: !!salesAgentId,
   });
 };
+
+// Fetch total commission paid in a period (all agents)
+export const useTotalCommissionPaid = (periodStart?: string | null, periodEnd?: string | null) => {
+  return useQuery({
+    queryKey: ['commission_paid_total', periodStart || null, periodEnd || null],
+    queryFn: async () => {
+      let query = supabase.from('commission_payments').select('amount');
+      if (periodStart) query = query.gte('payment_date', periodStart);
+      if (periodEnd) query = query.lte('payment_date', periodEnd);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+    },
+  });
+};

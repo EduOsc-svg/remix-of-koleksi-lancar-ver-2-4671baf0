@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfYear, endOfYear, format, eachMonthOfInterval, differenceInDays } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
-import { CommissionTier, YEARLY_BONUS_PERCENTAGE } from './useCommissionTiers';
+import { CommissionTier, calculateTieredCommission } from './useCommissionTiers';
 
 
 export type ContractStatusFilter = 'all' | 'lancar' | 'kurang_lancar' | 'macet' | 'completed';
@@ -232,15 +232,18 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
         if (md) md.collected += amt;
       });
 
-      // KOMISI TAHUNAN: pakai BONUS TAHUNAN (YEARLY_BONUS_PERCENTAGE = 0.8%) dari total omset
-      // tahun berjalan per agent — BUKAN tier per bulan.
-      // Rumus: komisi_agent = total_omset_tahunan_agent × 0.8%
+      // KOMISI TAHUNAN: gunakan TIERED COMMISSION berdasarkan total omset per agent
+      // Rumus: cari tier yang sesuai dengan total_omset_tahunan_agent, ambil commission percentage,
+      // lalu hitung komisi_agent = total_omset_tahunan_agent × percentage_tier / 100
       let totalCommission = 0;
       const agentYearlyCommission = new Map<string, number>();
+      const agentCommissionPct = new Map<string, number>();
 
       agentYearlyOmset.forEach((omset, agentId) => {
-        const commission = (omset * YEARLY_BONUS_PERCENTAGE) / 100;
+        const commissionPct = calculateTieredCommission(omset, tiers);
+        const commission = (omset * commissionPct) / 100;
         agentYearlyCommission.set(agentId, commission);
+        agentCommissionPct.set(agentId, commissionPct);
         totalCommission += commission;
       });
 
@@ -337,7 +340,7 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
         const total_modal = agentYearlyModal.get(agent.id) || 0;
         const total_commission = agentYearlyCommission.get(agent.id) || 0;
         const profit = total_omset - total_modal;
-        const commissionPct = total_omset > 0 ? YEARLY_BONUS_PERCENTAGE : 0;
+        const commissionPct = agentCommissionPct.get(agent.id) || 0;
 
         return {
           agent_id: agent.id,

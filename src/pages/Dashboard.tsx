@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMonthlyPerformance, useYearlyTarget } from "@/hooks/useMonthlyPerformance";
@@ -100,7 +100,20 @@ export default function Dashboard() {
   const { data: dpMonthly } = useDpTotalMonthly(selectedMonth);
   const { data: dpYearly } = useDpTotalYearly(selectedYear);
   const { promptAdminNote } = useAdminNote();
-  
+
+  // Debug: log if any major hook has error
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log('[Dashboard] Data status:', {
+        monthlyLoading: isLoadingMonthly,
+        yearlyLoading: isLoadingYearly,
+        yearlyFinancialLoading: isLoadingYearlyFinancial,
+        yearlyFinancial: !!yearlyFinancial,
+        monthlyData: !!monthlyData,
+        contracts: !!contracts?.length,
+      });
+    }
+  }, [isLoadingMonthly, isLoadingYearly, isLoadingYearlyFinancial, yearlyFinancial, monthlyData, contracts]);
   
   // Pagination for sales agent performance table
   const AGENTS_PER_PAGE = 10;
@@ -922,8 +935,8 @@ export default function Dashboard() {
                           const profitMargin = agent.total_modal > 0 
                             ? ((agent.profit / agent.total_modal) * 100) 
                             : 0;
-                          // Komisi tahunan = bonus tahunan 0.8% × omset agen
-                          const yearlyAgentCommission = (agent.total_omset * YEARLY_BONUS_PERCENTAGE) / 100;
+                          // Komisi tahunan = total komisi dari tier komisi berdasarkan omset agen
+                          const yearlyAgentCommission = agent.total_commission || 0;
                           return (
                             <TableRow 
                               key={agent.agent_id}
@@ -938,7 +951,7 @@ export default function Dashboard() {
                               <TableCell>
                                 <div>
                                   <p className="font-medium">{agent.agent_code}</p>
-                                  <p className="text-xs text-muted-foreground">{agent.agent_name} • {agent.contracts_count} kontrak • {YEARLY_BONUS_PERCENTAGE}%</p>
+                                  <p className="text-xs text-muted-foreground">{agent.agent_name} • {agent.contracts_count} kontrak • {agent.commission_percentage?.toFixed(1) || 0}%</p>
                                 </div>
                               </TableCell>
                               <TableCell className="text-right text-blue-600">{formatRupiah(agent.total_modal)}</TableCell>

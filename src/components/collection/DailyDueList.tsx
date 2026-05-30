@@ -280,10 +280,10 @@ export function DailyDueList({
             Daftar Penagihan Hari Ini
           </CardTitle>
           <CardDescription>
-            Daftar pelanggan dengan kupon <strong>keluar</strong> (sudah diserahterimakan ke
-            kolektor) yang <strong>belum pernah diproses</strong> (belum ada pembayaran). 
-            Klik <strong>Bayar</strong> untuk mencatat hasil tagihan; data akan hilang dari 
-            daftar segera setelah diproses (baik sebagian maupun penuh).
+            Daftar batch kupon yang sudah diserahterimakan ke kolektor. Secara default
+            semua kupon dalam batch <strong>otomatis LUNAS</strong> saat serah terima
+            dibuat. Klik <strong>Belum Bayar</strong> hanya jika ada kupon yang
+            sebenarnya tidak terbayar — sistem akan menghapus pembayaran tsb.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -376,7 +376,7 @@ export function DailyDueList({
                             size="sm"
                             variant="outline"
                             onClick={() => openDialog(row)}
-                            disabled={row.unpaid_count <= 0}
+                            disabled={row.paid_count <= 0}
                             className="gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
                           >
                             <AlertTriangle className="h-3.5 w-3.5" />
@@ -411,37 +411,37 @@ export function DailyDueList({
             <div className="space-y-4">
               <div className="rounded-lg border bg-muted/30 p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Kupon outstanding:</span>
-                  <span className="font-semibold">{selected.unpaid_count} kupon</span>
+                  <span className="text-muted-foreground">Kupon LUNAS dalam batch:</span>
+                  <span className="font-semibold">{selected.paid_count} kupon</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Nominal per kupon:</span>
                   <span className="font-semibold">{formatRupiah(selected.daily_amount)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total tagihan:</span>
+                  <span className="text-muted-foreground">Total nilai batch:</span>
                   <span className="font-bold text-primary">
-                    {formatRupiah(selected.daily_amount * selected.unpaid_count)}
+                    {formatRupiah(selected.daily_amount * selected.paid_count)}
                   </span>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="returned-count" className="text-sm font-medium">
-                  Jumlah Kupon Kembali (Belum Terbayar)
+                  Jumlah Kupon yang BELUM TERBAYAR
                 </Label>
                 <Input
                   id="returned-count"
                   type="number"
                   min={0}
-                  max={selected.unpaid_count}
+                  max={selected.paid_count}
                   value={returnedCount}
                   onChange={(e) =>
                     setReturnedCount(
                       Math.max(
                         0,
                         Math.min(
-                          selected.unpaid_count,
+                          selected.paid_count,
                           parseInt(e.target.value) || 0,
                         ),
                       ),
@@ -450,9 +450,9 @@ export function DailyDueList({
                   className="text-center font-semibold text-lg"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Default = semua kupon ditandai <strong>belum bayar</strong>. Ubah
-                  jika sebagian sebenarnya lunas (sisa = kupon yang dikembalikan
-                  kolektor / gagal tagih).
+                  Default = semua kupon lunas dalam batch ini akan di-rollback menjadi{" "}
+                  <strong>belum bayar</strong>. Ubah jika hanya sebagian yang gagal
+                  ditagih. Pembayaran otomatis untuk kupon tsb akan dihapus.
                 </p>
               </div>
 
@@ -470,18 +470,18 @@ export function DailyDueList({
                 )}
                 <AlertDescription className="ml-2 space-y-1">
                   <div className="flex justify-between">
-                    <span>Lunas:</span>
+                    <span>Tetap LUNAS:</span>
                     <span className="font-semibold">
-                      {selected.unpaid_count - returnedCount} kupon (
+                      {selected.paid_count - returnedCount} kupon (
                       {formatRupiah(
                         selected.daily_amount *
-                          (selected.unpaid_count - returnedCount),
+                          (selected.paid_count - returnedCount),
                       )}
                       )
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Kembali (belum bayar):</span>
+                    <span>Di-rollback (belum bayar):</span>
                     <span className="font-semibold">
                       {returnedCount} kupon (
                       {formatRupiah(selected.daily_amount * returnedCount)})

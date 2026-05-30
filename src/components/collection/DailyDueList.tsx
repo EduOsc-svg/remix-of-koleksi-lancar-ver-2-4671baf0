@@ -183,8 +183,8 @@ export function DailyDueList({
     extraNote: string,
   ) => {
     const total = row.unpaid_count;
-    const returned = Math.max(0, Math.min(returnedCount, total));
-    const paidCount = total - returned;
+    const safeReturned = Math.max(0, Math.min(returned, total));
+    const paidCount = total - safeReturned;
     const toPayIndices = row.unpaid_indices.slice(0, paidCount);
 
       if (toPayIndices.length > 0) {
@@ -227,7 +227,7 @@ export function DailyDueList({
         description:
           `Penagihan ${row.contract_ref} (${row.customer_name}) ` +
           `batch ${row.start_index}-${row.end_index}: ` +
-          `${paidCount} kupon LUNAS, ${returned} kupon KEMBALI` +
+          `${paidCount} kupon LUNAS, ${safeReturned} kupon KEMBALI` +
           (extraNote ? ` — Catatan: ${extraNote}` : ""),
         contract_id: row.contract_id,
       });
@@ -241,7 +241,7 @@ export function DailyDueList({
       queryClient.invalidateQueries({ queryKey: ["aggregated_payments"] });
 
       toast.success(
-        `${row.customer_name}: ${paidCount} lunas, ${returned} kembali`,
+        `${row.customer_name}: ${paidCount} lunas, ${safeReturned} kembali`,
       );
   };
 

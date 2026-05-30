@@ -272,37 +272,10 @@ export default function Collection() {
             </div>
           </div>
           
-          {/* Filtered Handovers based on payment status */}
-          {(() => {
-            const filteredHandovers = (handovers || []).filter((h: any) => {
-              const currentIndex = h.credit_contracts?.current_installment_index || 0;
-              
-              // Determine payment status
-              if (paymentStatusFilter === "unpaid") {
-                // Belum bayar: currentIndex < start_index
-                return currentIndex < h.start_index;
-              } else if (paymentStatusFilter === "partial") {
-                // Sebagian: start_index <= currentIndex < end_index
-                return currentIndex >= h.start_index && currentIndex < h.end_index;
-              } else if (paymentStatusFilter === "paid") {
-                // Lunas: currentIndex >= end_index
-                return currentIndex >= h.end_index;
-              } else {
-                // all
-                return true;
-              }
-            });
-            
-            return (
-              <>
-                <div className="text-sm text-muted-foreground mb-3">
-                  Menampilkan {filteredHandovers.length} dari {handovers?.length || 0} serah terima
-                </div>
-              </>
-            );
-          })()}
-          
-          <DailyDueList selectedDate={selectedDate} />
+          <DailyDueList
+            selectedDate={selectedDate}
+            statusFilter={paymentStatusFilter as "unpaid" | "partial" | "paid" | "all"}
+          />
         </TabsContent>
 
         <TabsContent value="outstanding" className="space-y-6 mt-6">

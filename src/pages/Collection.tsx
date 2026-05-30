@@ -30,7 +30,7 @@ export default function Collection() {
   // Manifest state (declared first so hooks below can use them)
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("unpaid");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("paid");
 
   const { data: collectors } = useCollectors();
   const { data: contracts, isLoading: contractsLoading } = useContracts("active");

@@ -63,6 +63,51 @@ export const useCreateCouponHandover = () => {
         .select()
         .single();
       if (error) throw error;
+
+      // AUTO-PAY: Saat serah terima dibuat, semua kupon dalam batch otomatis
+      // tercatat LUNAS di payment_logs. User hanya perlu menandai "Belum Bayar"
+      // jika ada kupon yang tidak terbayar (akan dihapus dari payment_logs lewat modal).
+      try {
+        const { data: contract, error: cErr } = await supabase
+          .from('credit_contracts')
+          .select('daily_installment_amount, current_installment_index')
+          .eq('id', data.contract_id)
+          .single();
+        if (cErr) throw cErr;
+
+        const indices: number[] = [];
+        for (let i = data.start_index; i <= data.end_index; i++) indices.push(i);
+
+        const payments = indices.map((idx) => ({
+          contract_id: data.contract_id,
+          payment_date: data.handover_date,
+          installment_index: idx,
+          amount_paid: contract.daily_installment_amount,
+          collector_id: data.collector_id,
+          notes: `Auto-lunas kupon ${idx} (batch ${data.start_index}-${data.end_index})`,
+        }));
+
+        const { error: payErr } = await supabase.from('payment_logs').insert(payments);
+        if (payErr) throw payErr;
+
+        const { error: couponErr } = await supabase
+          .from('installment_coupons')
+          .update({ status: 'paid' })
+          .eq('contract_id', data.contract_id)
+          .in('installment_index', indices);
+        if (couponErr) console.warn('update installment_coupons:', couponErr.message);
+
+        const { error: updErr } = await supabase
+          .from('credit_contracts')
+          .update({ current_installment_index: data.end_index })
+          .eq('id', data.contract_id)
+          .lt('current_installment_index', data.end_index);
+        if (updErr) throw updErr;
+      } catch (e) {
+        console.error('Auto-pay handover gagal:', e);
+        throw e;
+      }
+
       return result;
     },
     onSuccess: () => {
@@ -70,6 +115,9 @@ export const useCreateCouponHandover = () => {
       queryClient.invalidateQueries({ queryKey: ['outstanding_coupons'] });
       queryClient.invalidateQueries({ queryKey: ['credit_contracts'] });
       queryClient.invalidateQueries({ queryKey: ['installment_coupons'] });
+      queryClient.invalidateQueries({ queryKey: ['payment_logs'] });
+      queryClient.invalidateQueries({ queryKey: ['aggregated_payments'] });
+      queryClient.invalidateQueries({ queryKey: ['collection_trend'] });
     },
   });
 };

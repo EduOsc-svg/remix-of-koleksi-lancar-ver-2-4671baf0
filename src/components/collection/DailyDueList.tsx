@@ -341,6 +341,7 @@ export function DailyDueList({
                     <TableHead>Pelanggan</TableHead>
                     <TableHead>Kolektor</TableHead>
                     <TableHead className="text-center">Range Kupon</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
                     <TableHead className="text-center">Outstanding</TableHead>
                     <TableHead className="text-right">Total Tagihan</TableHead>
                     <TableHead className="text-right">Aksi</TableHead>
@@ -362,6 +363,21 @@ export function DailyDueList({
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
+                        {row.status === "paid" ? (
+                          <Badge className="bg-emerald-500/15 text-emerald-700 border border-emerald-500/30 hover:bg-emerald-500/20">
+                            Lunas
+                          </Badge>
+                        ) : row.status === "partial" ? (
+                          <Badge className="bg-amber-500/15 text-amber-700 border border-amber-500/30 hover:bg-amber-500/20">
+                            Sebagian
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-destructive/15 text-destructive border border-destructive/30 hover:bg-destructive/20">
+                            Belum Bayar
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
                         <Badge variant="outline" className="text-destructive border-destructive/40">
                           {row.unpaid_count} kupon
                         </Badge>
@@ -370,14 +386,32 @@ export function DailyDueList({
                         {formatRupiah(row.daily_amount * row.unpaid_count)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          onClick={() => openDialog(row)}
-                          className="gap-1"
-                        >
-                          <Wallet className="h-3.5 w-3.5" />
-                          Bayar
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleAutoPay(row)}
+                            disabled={
+                              row.unpaid_count <= 0 ||
+                              autoPayingId === row.handover_id
+                            }
+                            className="gap-1"
+                          >
+                            <Wallet className="h-3.5 w-3.5" />
+                            {autoPayingId === row.handover_id
+                              ? "Memproses..."
+                              : "Bayar"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openDialog(row)}
+                            disabled={row.unpaid_count <= 0}
+                            className="gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            Belum Bayar
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -393,8 +427,8 @@ export function DailyDueList({
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Wallet className="h-5 w-5" />
-              Catat Penagihan
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Tandai Belum Bayar
             </DialogTitle>
             <DialogDescription>
               {selected?.customer_name} • {selected?.contract_ref} • Batch{" "}
@@ -445,8 +479,25 @@ export function DailyDueList({
                   className="text-center font-semibold text-lg"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Default <strong>0</strong> = semua kupon outstanding dianggap LUNAS. Isi
-                  sesuai jumlah kupon yang dikembalikan kolektor (gagal tagih).
+                  Default = semua kupon ditandai <strong>belum bayar</strong>. Ubah
+                  jika sebagian sebenarnya lunas (sisa = kupon yang dikembalikan
+                  kolektor / gagal tagih).
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="note-text" className="text-sm font-medium">
+                  Catatan <span className="text-destructive">*</span>
+                </Label>
+                <Textarea
+                  id="note-text"
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  placeholder="Alasan belum bayar (mis. pelanggan tidak di rumah, janji bayar besok, dll.)"
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Catatan wajib diisi dan akan disimpan di log aktivitas.
                 </p>
               </div>
 
@@ -490,8 +541,12 @@ export function DailyDueList({
             <Button variant="outline" onClick={closeDialog} disabled={submitting}>
               Batal
             </Button>
-            <Button onClick={handleSubmit} disabled={submitting}>
-              {submitting ? "Menyimpan..." : "Catat Penagihan"}
+            <Button
+              onClick={handleSubmit}
+              disabled={submitting || !noteText.trim()}
+              variant="destructive"
+            >
+              {submitting ? "Menyimpan..." : "Simpan"}
             </Button>
           </DialogFooter>
         </DialogContent>

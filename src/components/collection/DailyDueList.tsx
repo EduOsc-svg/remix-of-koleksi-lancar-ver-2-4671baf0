@@ -170,68 +170,67 @@ export function DailyDueList({
   const [returnedCount, setReturnedCount] = useState<number>(0);
   const [submitting, setSubmitting] = useState(false);
 
-  // Default returnedCount = semua unpaid (manual modal = tandai "belum bayar")
+  // Default returnedCount = semua kupon LUNAS dalam batch (rollback ke "belum bayar")
   const openDialog = (row: DueRow) => {
     setSelected(row);
-    setReturnedCount(row.unpaid_count);
+    setReturnedCount(row.paid_count);
   };
   const closeDialog = () => {
     setSelected(null);
     setReturnedCount(0);
   };
 
-  // Core processor — dipakai oleh tombol "Bayar" (auto lunas) dan modal "Belum Bayar"
+  // Core processor — modal "Belum Bayar": rollback N kupon LUNAS terakhir menjadi unpaid.
+  // Karena handover auto-mark semua kupon LUNAS, di sini kita HAPUS payment_logs untuk
+  // kupon yang ditandai "kembali / belum bayar", balikkan installment_coupons → unpaid,
+  // dan mundurkan credit_contracts.current_installment_index.
   const processRow = async (
     row: DueRow,
-    returned: number,
+    returnedFromPaid: number,
     extraNote: string,
   ) => {
-    const total = row.unpaid_count;
-    const safeReturned = Math.max(0, Math.min(returned, total));
-    const paidCount = total - safeReturned;
-    const toPayIndices = row.unpaid_indices.slice(0, paidCount);
+    const total = row.paid_count;
+    const safeReturned = Math.max(0, Math.min(returnedFromPaid, total));
+    if (safeReturned <= 0) {
+      toast.info("Tidak ada kupon yang ditandai belum bayar");
+      return;
+    }
+    // Ambil N indeks LUNAS TERAKHIR dalam batch untuk di-rollback
+    const toRevert = row.paid_indices.slice(-safeReturned);
+    if (toRevert.length === 0) return;
 
-      if (toPayIndices.length > 0) {
-        const today = new Date().toISOString().split("T")[0];
-        const payments = toPayIndices.map((idx) => ({
-          contract_id: row.contract_id,
-          payment_date: today,
-          installment_index: idx,
-          amount_paid: row.daily_amount,
-          collector_id: row.collector_id,
-          notes:
-            `Pembayaran kupon ${idx} (batch ${row.start_index}-${row.end_index})` +
-            (extraNote ? ` — ${extraNote}` : ""),
-        }));
-        const { error: payErr } = await supabase
-          .from("payment_logs")
-          .insert(payments);
-        if (payErr) throw payErr;
-        const { error: couponErr } = await supabase
-          .from("installment_coupons")
-          .update({ status: "paid" })
-          .eq("contract_id", row.contract_id)
-          .in("installment_index", toPayIndices);
-        if (couponErr) {
-          console.warn("update installment_coupons:", couponErr.message);
-        }
-        const maxIndex = Math.max(...toPayIndices);
-        const { error: cErr } = await supabase
-          .from("credit_contracts")
-          .update({ current_installment_index: maxIndex })
-          .eq("id", row.contract_id)
-          .lt("current_installment_index", maxIndex);
-        if (cErr) throw cErr;
-      }
+    // 1) Hapus payment_logs untuk indeks tsb
+    const { error: delErr } = await supabase
+      .from("payment_logs")
+      .delete()
+      .eq("contract_id", row.contract_id)
+      .in("installment_index", toRevert);
+    if (delErr) throw delErr;
+
+    // 2) Balikkan installment_coupons → unpaid
+    const { error: couponErr } = await supabase
+      .from("installment_coupons")
+      .update({ status: "unpaid" })
+      .eq("contract_id", row.contract_id)
+      .in("installment_index", toRevert);
+    if (couponErr) console.warn("update installment_coupons:", couponErr.message);
+
+    // 3) Mundurkan current_installment_index ke (indeks lunas terendah - 1)
+    const newCurrent = Math.min(...toRevert) - 1;
+    const { error: cErr } = await supabase
+      .from("credit_contracts")
+      .update({ current_installment_index: newCurrent })
+      .eq("id", row.contract_id);
+    if (cErr) throw cErr;
 
       logActivity.mutate({
         action: "DAILY_COLLECTION",
         entity_type: "payment",
         entity_id: null,
         description:
-          `Penagihan ${row.contract_ref} (${row.customer_name}) ` +
+          `Tandai Belum Bayar ${row.contract_ref} (${row.customer_name}) ` +
           `batch ${row.start_index}-${row.end_index}: ` +
-          `${paidCount} kupon LUNAS, ${safeReturned} kupon KEMBALI` +
+          `${safeReturned} kupon dikembalikan ke status BELUM BAYAR` +
           (extraNote ? ` — Catatan: ${extraNote}` : ""),
         contract_id: row.contract_id,
       });
@@ -245,14 +244,14 @@ export function DailyDueList({
       queryClient.invalidateQueries({ queryKey: ["aggregated_payments"] });
 
       toast.success(
-        `${row.customer_name}: ${paidCount} lunas, ${safeReturned} kembali`,
+        `${row.customer_name}: ${safeReturned} kupon ditandai BELUM BAYAR`,
       );
   };
 
   // Submit dari modal "Belum Bayar" (manual)
   const handleSubmit = async () => {
     if (!selected) return;
-    const returned = Math.max(0, Math.min(returnedCount, selected.unpaid_count));
+    const returned = Math.max(0, Math.min(returnedCount, selected.paid_count));
     setSubmitting(true);
     try {
       await processRow(selected, returned, "");

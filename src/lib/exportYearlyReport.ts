@@ -51,6 +51,7 @@ export const exportYearlyReportToExcel = async (
     ['Jumlah Kontrak', data.contracts_count, '#,##0', 'Total kontrak di tahun ini'],
     ['Kontrak Selesai', data.completed_count, '#,##0', 'Kontrak yang sudah lunas'],
     ['Kontrak Aktif', data.active_count, '#,##0', 'Kontrak yang masih berjalan'],
+    ['Sangat Lancar', data.sangat_lancar_count, '#,##0', 'Status pembayaran sangat lancar'],
     ['Lancar', data.lancar_count, '#,##0', 'Status pembayaran lancar'],
     ['Kurang Lancar', data.kurang_lancar_count, '#,##0', 'Status pembayaran kurang lancar'],
     ['Macet', data.macet_count, '#,##0', 'Status pembayaran macet'],
@@ -438,6 +439,7 @@ export const exportYearlyReportToExcel = async (
   const statusData = [
     ['Status', 'Jumlah Kontrak', 'Persentase'],
     ['Completed', data.completed_count, (data.completed_count / data.contracts_count) * 100],
+    ['Sangat Lancar', data.sangat_lancar_count, (data.sangat_lancar_count / data.contracts_count) * 100],
     ['Lancar', data.lancar_count, (data.lancar_count / data.contracts_count) * 100],
     ['Kurang Lancar', data.kurang_lancar_count, (data.kurang_lancar_count / data.contracts_count) * 100],
     ['Macet', data.macet_count, (data.macet_count / data.contracts_count) * 100],

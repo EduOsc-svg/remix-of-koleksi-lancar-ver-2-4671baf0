@@ -3,9 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { startOfYear, endOfYear, format, eachMonthOfInterval, differenceInDays } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { CommissionTier, calculateTieredCommission } from './useCommissionTiers';
+import { determineContractStatus, calculateLateDays, calculateDaysSinceLastPayment, ContractStatus } from '@/lib/statusCalculation';
 
 
-export type ContractStatusFilter = 'all' | 'lancar' | 'kurang_lancar' | 'macet' | 'completed';
+export type ContractStatusFilter = 'all' | 'sangat_lancar' | 'lancar' | 'kurang_lancar' | 'macet' | 'completed';
 
 export interface MonthlyBreakdown {
   month: string;
@@ -65,6 +66,7 @@ export interface YearlyFinancialSummary {
   contracts_count: number;
   completed_count: number;
   active_count: number;
+  sangat_lancar_count: number;
   lancar_count: number;
   kurang_lancar_count: number;
   macet_count: number;
@@ -74,23 +76,6 @@ export interface YearlyFinancialSummary {
   agents: AgentYearlyPerformance[];
   monthly_details: MonthlyDetailData[];
 }
-
-const calculateContractStatus = (contract: {
-  status: string;
-  current_installment_index: number;
-  created_at: string;
-}): 'completed' | 'lancar' | 'kurang_lancar' | 'macet' => {
-  if (contract.status === 'completed') return 'completed';
-  const daysSinceCreation = differenceInDays(new Date(), new Date(contract.created_at));
-  const installmentsPaid = contract.current_installment_index;
-  if (installmentsPaid === 0) {
-    return daysSinceCreation > 7 ? 'macet' : daysSinceCreation > 3 ? 'kurang_lancar' : 'lancar';
-  }
-  const daysPerDue = daysSinceCreation / installmentsPaid;
-  if (daysPerDue <= 1.2) return 'lancar';
-  if (daysPerDue <= 2.0) return 'kurang_lancar';
-  return 'macet';
-};
 
 /**
  * Ringkasan keuangan tahunan — CONTRACT BASIS (accrual).
@@ -104,6 +89,12 @@ const calculateContractStatus = (contract: {
  * - Agregat: Sum dari sisa tagihan semua kontrak tahun itu yang masih memiliki sisa
  * 
  * total_collected: Uang yang tertagih tahun ini (cash).
+ * 
+ * Status Kontrak (NEW):
+ * - sangat_lancar: Tidak ada keterlambatan sama sekali (0 hari terlambat)
+ * - lancar: Terlambat 1-3 hari
+ * - kurang_lancar: Terlambat 4-19 hari
+ * - macet: Terlambat 20+ hari ATAU 6+ hari tanpa pembayaran
  */
 export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter: ContractStatusFilter = 'all') => {
   const yearStart = format(startOfYear(year), 'yyyy-MM-dd');
@@ -119,6 +110,8 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
         { data: allPayments, error: allPaymentsError },
         { data: expenses, error: expensesError },
         { data: tiersData, error: tiersError },
+        { data: allCoupons, error: allCouponsError },
+        { data: allPaymentLogs, error: allPaymentLogsError },
       ] = await Promise.all([
         supabase.from('sales_agents').select('id, name, agent_code'),
         supabase.from('credit_contracts').select('id, contract_ref, omset, total_loan_amount, sales_agent_id, start_date, status, current_installment_index, tenor_days, created_at, product_type, customer_id, daily_installment_amount, customers(name, phone)').neq('status', 'returned').gte('start_date', yearStart).lte('start_date', yearEnd),
@@ -126,6 +119,8 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
         supabase.from('payment_logs').select('amount_paid, contract_id'),
         supabase.from('operational_expenses').select('amount, expense_date, description, category').gte('expense_date', yearStart).lte('expense_date', yearEnd),
         supabase.from('commission_tiers').select('*').order('min_amount', { ascending: true }),
+        supabase.from('installment_coupons').select('contract_id, due_date, status, installment_index'),
+        supabase.from('payment_logs').select('contract_id, payment_date').order('payment_date', { ascending: false }),
       ]);
 
       if (agentsError) throw agentsError;
@@ -134,6 +129,8 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
       if (allPaymentsError) throw allPaymentsError;
       if (expensesError) throw expensesError;
       if (tiersError) throw tiersError;
+      if (allCouponsError) throw allCouponsError;
+      if (allPaymentLogsError) throw allPaymentLogsError;
 
       const tiers = (tiersData || []) as CommissionTier[];
       const selectedYear = year.getFullYear();
@@ -141,6 +138,43 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
       // Lookups
       const agentLookup = new Map<string, { code: string; name: string }>();
       (agents || []).forEach((a: any) => agentLookup.set(a.id, { code: a.agent_code, name: a.name }));
+
+      // Build lookup maps untuk coupon dan payment data
+      // Map kontrak ke last payment date
+      const lastPaymentByContract = new Map<string, string>();
+      (allPaymentLogs || []).forEach((log: any) => {
+        if (!lastPaymentByContract.has(log.contract_id)) {
+          lastPaymentByContract.set(log.contract_id, log.payment_date);
+        }
+      });
+
+      // Map kontrak ke next unpaid coupon (due date)
+      const nextUnpaidCouponByContract = new Map<string, string>();
+      (allCoupons || []).forEach((coupon: any) => {
+        if (coupon.status === 'unpaid' && coupon.contract_id) {
+          if (!nextUnpaidCouponByContract.has(coupon.contract_id)) {
+            nextUnpaidCouponByContract.set(coupon.contract_id, coupon.due_date);
+          }
+        }
+      });
+
+      // Helper function: Hitung contract status dengan data real-time
+      const getContractStatusWithData = (contract: any): ContractStatus => {
+        if (contract.status === 'completed') return 'completed';
+        
+        const nextDueDate = nextUnpaidCouponByContract.get(contract.id);
+        const lastPaymentDate = lastPaymentByContract.get(contract.id);
+        
+        const lateDays = calculateLateDays(nextDueDate);
+        const daysSinceLastPayment = calculateDaysSinceLastPayment(lastPaymentDate);
+        
+        return determineContractStatus({
+          status: contract.status,
+          lateDays,
+          daysSinceLastPayment,
+          createdAt: contract.created_at,
+        });
+      };
 
       // Months scaffold
       const months = eachMonthOfInterval({ start: startOfYear(year), end: endOfYear(year) });
@@ -178,7 +212,7 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
         if (!contract.start_date) return;
 
         const startDate = new Date(contract.start_date);
-        const dynamicStatus = calculateContractStatus(contract);
+        const dynamicStatus = getContractStatusWithData(contract);
         if (statusFilter !== 'all' && dynamicStatus !== statusFilter) return;
 
         const monthKey = format(startDate, 'yyyy-MM');
@@ -288,7 +322,7 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
       });
 
       // Status counts (note: contracts already filtered by DB, so no year check needed)
-      let completedCount = 0, activeCount = 0, lancarCount = 0, kurangLancarCount = 0, macetCount = 0;
+      let completedCount = 0, activeCount = 0, sangat_lancarCount = 0, lancarCount = 0, kurangLancarCount = 0, macetCount = 0;
       let totalContractsCount = 0;
 
       (contracts || []).forEach((contract: any) => {
@@ -296,11 +330,12 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
         if (contract.status === 'returned') return;
         totalContractsCount++;
 
-        const dynamicStatus = calculateContractStatus(contract);
+        const dynamicStatus = getContractStatusWithData(contract);
         if (statusFilter !== 'all' && dynamicStatus !== statusFilter) return;
 
         switch (dynamicStatus) {
           case 'completed': completedCount++; break;
+          case 'sangat_lancar': sangat_lancarCount++; activeCount++; break;
           case 'lancar': lancarCount++; activeCount++; break;
           case 'kurang_lancar': kurangLancarCount++; activeCount++; break;
           case 'macet': macetCount++; activeCount++; break;
@@ -383,6 +418,7 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
         contracts_count: totalContractsCount,
         completed_count: completedCount,
         active_count: activeCount,
+        sangat_lancar_count: sangat_lancarCount,
         lancar_count: lancarCount,
         kurang_lancar_count: kurangLancarCount,
         macet_count: macetCount,

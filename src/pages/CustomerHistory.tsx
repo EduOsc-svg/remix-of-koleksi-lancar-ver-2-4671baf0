@@ -29,49 +29,44 @@ import { usePagination } from "@/hooks/usePagination";
 import { TablePagination } from "@/components/TablePagination";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { differenceInDays } from "date-fns";
+import { 
+  calculateLateDays, 
+  calculateDaysSinceLastPayment, 
+  determineContractStatus,
+  getStatusLabel,
+  getStatusBadgeClass,
+  ContractStatus
+} from "@/lib/statusCalculation";
 
-type ContractStatusFilter = 'all' | 'lancar' | 'kurang_lancar' | 'macet' | 'completed';
+type ContractStatusFilter = 'all' | 'sangat_lancar' | 'lancar' | 'kurang_lancar' | 'macet' | 'completed';
 
-// Calculate dynamic contract status based on days_per_due metric
-const calculateContractStatus = (contract: {
+// Calculate dynamic contract status using heuristic (legacy) when coupon/payment data is not available
+const calculateContractStatusFallback = (contract: {
   status: string;
   current_installment_index: number;
   created_at: string;
-}): 'completed' | 'lancar' | 'kurang_lancar' | 'macet' => {
+}): ContractStatus => {
   if (contract.status === 'completed') return 'completed';
   
   const daysSinceCreation = differenceInDays(new Date(), new Date(contract.created_at));
   const installmentsPaid = contract.current_installment_index;
   
+  // Jika belum ada pembayaran sama sekali
   if (installmentsPaid === 0) {
-    return daysSinceCreation > 7 ? 'macet' : daysSinceCreation > 3 ? 'kurang_lancar' : 'lancar';
+    if (daysSinceCreation <= 1) return 'sangat_lancar';
+    if (daysSinceCreation <= 3) return 'lancar';
+    if (daysSinceCreation <= 19) return 'kurang_lancar';
+    return 'macet';
   }
   
+  // Heuristik: rata-rata hari per cicilan
   const daysPerDue = daysSinceCreation / installmentsPaid;
+  const estimatedLateDays = Math.max(0, (daysPerDue - 1) * 30); // Perkiraan kasar
   
-  if (daysPerDue <= 1.2) return 'lancar';
-  if (daysPerDue <= 2.0) return 'kurang_lancar';
+  if (estimatedLateDays === 0) return 'sangat_lancar';
+  if (estimatedLateDays <= 3) return 'lancar';
+  if (estimatedLateDays <= 19) return 'kurang_lancar';
   return 'macet';
-};
-
-const getStatusLabel = (status: 'completed' | 'lancar' | 'kurang_lancar' | 'macet'): string => {
-  const labels: Record<string, string> = {
-    completed: 'Lunas',
-    lancar: 'Lancar',
-    kurang_lancar: 'Kurang Lancar',
-    macet: 'Macet'
-  };
-  return labels[status] || status;
-};
-
-const getStatusBadgeClass = (status: 'completed' | 'lancar' | 'kurang_lancar' | 'macet'): string => {
-  const classes: Record<string, string> = {
-    completed: 'bg-blue-100 text-blue-700',
-    lancar: 'bg-green-100 text-green-700',
-    kurang_lancar: 'bg-yellow-100 text-yellow-700',
-    macet: 'bg-red-100 text-red-700'
-  };
-  return classes[status] || '';
 };
 
 export default function CustomerHistory() {
@@ -103,7 +98,7 @@ export default function CustomerHistory() {
       // Check if customer has any contract matching the status filter
       const customerContracts = contracts.filter(c => c.customer_id === customer.id);
       return customerContracts.some(contract => {
-        const dynamicStatus = calculateContractStatus(contract);
+        const dynamicStatus = calculateContractStatusFallback(contract);
         return dynamicStatus === statusFilter;
       });
     });
@@ -118,7 +113,7 @@ export default function CustomerHistory() {
     if (statusFilter === 'all') return filtered;
     
     return filtered.filter(contract => {
-      const dynamicStatus = calculateContractStatus(contract);
+      const dynamicStatus = calculateContractStatusFallback(contract);
       return dynamicStatus === statusFilter;
     });
   }, [contracts, selectedCustomerId, statusFilter]);
@@ -151,7 +146,7 @@ export default function CustomerHistory() {
 
   // Get dynamic status for selected contract
   const selectedContractDynamicStatus = selectedContract 
-    ? calculateContractStatus(selectedContract) 
+    ? calculateContractStatusFallback(selectedContract) 
     : null;
 
   // Tanggal jatuh tempo = due_date kupon unpaid berikutnya
@@ -212,6 +207,9 @@ export default function CustomerHistory() {
               <ToggleGroupItem value="all" size="sm" className="text-xs px-3">
                 Semua
               </ToggleGroupItem>
+              <ToggleGroupItem value="sangat_lancar" size="sm" className="text-xs px-3 data-[state=on]:bg-green-100 data-[state=on]:text-green-700">
+                Sangat Lancar
+              </ToggleGroupItem>
               <ToggleGroupItem value="lancar" size="sm" className="text-xs px-3 data-[state=on]:bg-green-100 data-[state=on]:text-green-700">
                 Lancar
               </ToggleGroupItem>
@@ -234,7 +232,7 @@ export default function CustomerHistory() {
                 // Get contracts for this customer to show status badges
                 const custContracts = contracts?.filter(c => c.customer_id === customer.id) || [];
                 const statusCounts = custContracts.reduce((acc, c) => {
-                  const status = calculateContractStatus(c);
+                  const status = calculateContractStatusFallback(c);
                   acc[status] = (acc[status] || 0) + 1;
                   return acc;
                 }, {} as Record<string, number>);
@@ -258,6 +256,11 @@ export default function CustomerHistory() {
                         </div>
                       </div>
                       <div className="flex gap-1">
+                        {statusCounts.sangat_lancar && (
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                            {statusCounts.sangat_lancar}
+                          </Badge>
+                        )}
                         {statusCounts.lancar && (
                           <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
                             {statusCounts.lancar}
@@ -315,7 +318,7 @@ export default function CustomerHistory() {
                 </SelectTrigger>
                 <SelectContent>
                   {customerContracts?.map((contract) => {
-                    const contractStatus = calculateContractStatus(contract);
+                    const contractStatus = calculateContractStatusFallback(contract);
                     return (
                       <SelectItem key={contract.id} value={contract.id}>
                         <div className="flex items-center gap-2">
@@ -360,8 +363,43 @@ export default function CustomerHistory() {
                   </div>
                 </div>
 
+                {/* Informasi Alamat & Kode */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2 border-t">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Alamat Rumah</p>
+                    <p className="font-medium text-sm">{selectedContract.customers?.address || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Alamat Usaha</p>
+                    <p className="font-medium text-sm">{selectedContract.customers?.business_address || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Kode Sales</p>
+                    <p className="font-medium">{selectedContract.sales_agents?.agent_code || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Kode Kolektor</p>
+                    <p className="font-medium">{selectedContract.collectors?.collector_code || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Tgl Pengambilan</p>
+                    <p className="font-medium">{selectedContract.start_date ? formatDate(selectedContract.start_date) : "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Tgl Lunas</p>
+                    <p className="font-medium">
+                      {selectedContract.status === 'completed' 
+                        ? (payments && payments.length > 0 
+                          ? formatDate(payments[0].payment_date) 
+                          : "-")
+                        : "-"
+                      }
+                    </p>
+                  </div>
+                </div>
+
                 {/* Cicilan yang dibayar - Progress */}
-                <div className="space-y-2">
+                <div className="space-y-2 pt-2 border-t">
                   <div className="flex justify-between text-sm">
                     <span>Cicilan Dibayar</span>
                     <span className="font-medium">

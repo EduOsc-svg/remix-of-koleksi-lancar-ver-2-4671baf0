@@ -1,5 +1,5 @@
 import React from 'react';
-import BG_IMAGE from '../../assets/Desain_tanpa_judul__2_-removebg.png';
+import BG_IMAGE from '@/assets/Background WM SME2.png'
 import { createPortal } from "react-dom";
 
 // --- Tipe Data ---
@@ -301,8 +301,8 @@ export function PrintCoupon8x5({ coupons, contract }: PrintCoupon8x5Props) {
   const couponPages = groupCouponsIntoPages(coupons);
 
   // Constants
-  const REKENING_NUMBER = "7052-0101-4075-532";
-  const KANTOR_NUMBER = "0852 5882 5882";
+  const REKENING_NUMBER = "0082-0100-3537-567";
+  const KANTOR_NUMBER = "0821 8802 0656";
   const BG_IMAGE_URL = BG_IMAGE;
   
   // Preload background once and reuse as a data URL to avoid repeated network fetches

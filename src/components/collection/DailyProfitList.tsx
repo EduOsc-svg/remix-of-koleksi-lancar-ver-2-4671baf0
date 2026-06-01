@@ -125,7 +125,28 @@ export function DailyProfitList() {
 
     dailyPayments.forEach((p: any) => {
       const info = contractMap.get(p.contract_id);
-      if (!info) return;
+      
+      // Handle missing contracts - still count the payment!
+      if (!info) {
+        console.warn(`⚠️ Missing contract data for payment ${p.id} with contract_id: ${p.contract_id}`);
+        const existing = grouped.get(p.contract_id) || {
+          contract_id: p.contract_id,
+          contract_ref: p.credit_contracts?.contract_ref || `[Unknown-${p.contract_id.substring(0, 8)}]`,
+          customer_name: p.credit_contracts?.customers?.name || "[Contract Data Missing]",
+          kupon_bawa: 0,
+          kupon_pulang: 0,
+          coupons_paid: 0,
+          total_tagihan: 0,
+          collected: 0,
+          modal_portion: 0,
+          profit_portion: 0,
+        };
+        existing.coupons_paid += 1;
+        existing.collected += Number(p.amount_paid || 0);
+        grouped.set(p.contract_id, existing);
+        return;
+      }
+
       const existing = grouped.get(p.contract_id) || {
         contract_id: p.contract_id,
         contract_ref: info.contract_ref,
@@ -214,18 +235,20 @@ export function DailyProfitList() {
 
     (monthlyPayments || []).forEach((p: any) => {
       const info = contractMap.get(p.contract_id);
-      if (!info) return;
-
       const dateStr = p.payment_date || format(new Date(p.created_at), "yyyy-MM-dd");
       const daily = map.get(dateStr);
       if (!daily) return;
 
       const amount = Number(p.amount_paid || 0);
       daily.coupons += 1;
-      daily.tagihan += info.daily_installment_amount;
       daily.collected += amount;
-      daily.modal += info.modal_per_coupon;
-      daily.profit += info.profit_per_coupon;
+      
+      // Only add contract-based calculations if contract info exists
+      if (info) {
+        daily.tagihan += info.daily_installment_amount;
+        daily.modal += info.modal_per_coupon;
+        daily.profit += info.profit_per_coupon;
+      }
 
       const existingContract = daily.contracts.find((c) => c.contract_id === p.contract_id);
       if (existingContract) {

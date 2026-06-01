@@ -26,24 +26,29 @@ export const usePayments = (dateFrom?: string, dateTo?: string, collectorId?: st
   return useQuery({
     queryKey: ['payment_logs', dateFrom, dateTo, collectorId],
     queryFn: async () => {
-      let query = supabase
-        .from('payment_logs')
-        .select('*, credit_contracts(contract_ref, customer_id, customers(name)), collectors(name, collector_code)')
-        .order('payment_date', { ascending: false });
-      
-      if (dateFrom) {
-        query = query.gte('payment_date', dateFrom);
+      // Paginate to bypass Supabase's default 1000-row limit
+      const PAGE_SIZE = 1000;
+      const all: PaymentWithRelations[] = [];
+      let from = 0;
+      while (true) {
+        let query = supabase
+          .from('payment_logs')
+          .select('*, credit_contracts(contract_ref, customer_id, customers(name)), collectors(name, collector_code)')
+          .order('payment_date', { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (dateFrom) query = query.gte('payment_date', dateFrom);
+        if (dateTo) query = query.lte('payment_date', dateTo);
+        if (collectorId) query = query.eq('collector_id', collectorId);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...(data as PaymentWithRelations[]));
+        if (data.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
       }
-      if (dateTo) {
-        query = query.lte('payment_date', dateTo);
-      }
-      if (collectorId) {
-        query = query.eq('collector_id', collectorId);
-      }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as PaymentWithRelations[];
+      return all;
     },
   });
 };

@@ -213,7 +213,7 @@ export default function CustomerHistory() {
                 // Get contracts for this customer to show status badges
                 const custContracts = contracts?.filter(c => c.customer_id === customer.id) || [];
                 const statusCounts = custContracts.reduce((acc, c) => {
-                  const status = calculateContractStatusFallback(c);
+                  const status = getStatus(c);
                   acc[status] = (acc[status] || 0) + 1;
                   return acc;
                 }, {} as Record<string, number>);
@@ -299,7 +299,7 @@ export default function CustomerHistory() {
                 </SelectTrigger>
                 <SelectContent>
                   {customerContracts?.map((contract) => {
-                    const contractStatus = calculateContractStatusFallback(contract);
+                    const contractStatus = getStatus(contract);
                     return (
                       <SelectItem key={contract.id} value={contract.id}>
                         <div className="flex items-center gap-2">

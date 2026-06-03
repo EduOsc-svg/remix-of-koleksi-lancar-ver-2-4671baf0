@@ -359,8 +359,8 @@ export default function CustomerHistory() {
                     <p className="font-medium">{selectedContract.sales_agents?.agent_code || "-"}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Kode Kolektor</p>
-                    <p className="font-medium">{selectedContract.collectors?.collector_code || "-"}</p>
+                    <p className="text-sm text-muted-foreground">Nama Kolektor</p>
+                    <p className="font-medium">{selectedContract.collectors?.name || "-"}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Tgl Pengambilan</p>

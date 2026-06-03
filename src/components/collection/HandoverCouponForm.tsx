@@ -59,6 +59,11 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
   const maxCoupons = selectedContract ? selectedContract.tenor_days - selectedContract.current_installment_index : 0;
   const submittedRef = useRef<string | null>(null);
 
+  // Filter kontrak berdasarkan kolektor yang dipilih (jika ada)
+  const filteredContracts = collectorId
+    ? contracts?.filter(c => c.collector_id === collectorId)
+    : contracts;
+
   // Auto-fill collector from contract when contract is selected
   useEffect(() => {
     if (!contractId) {
@@ -311,8 +316,8 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
                     <CommandInput placeholder="Cari kontrak atau konsumen..." className="h-9" />
                     <CommandList>
                       <CommandEmpty>Tidak ditemukan.</CommandEmpty>
-                      <CommandGroup>
-                        {contracts?.map(c => (
+                       <CommandGroup>
+                         {filteredContracts?.map(c => (
                           <CommandItem 
                             key={c.id} 
                             value={`${c.contract_ref} ${c.customers?.name || ''}`} 
@@ -332,6 +337,11 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
                             </div>
                           </CommandItem>
                         ))}
+                        {filteredContracts?.length === 0 && collectorId && (
+                          <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                            Tidak ada kontrak untuk kolektor ini.
+                          </div>
+                        )}
                       </CommandGroup>
                     </CommandList>
                   </Command>

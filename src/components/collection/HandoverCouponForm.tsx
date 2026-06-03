@@ -59,19 +59,29 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
   const maxCoupons = selectedContract ? selectedContract.tenor_days - selectedContract.current_installment_index : 0;
   const submittedRef = useRef<string | null>(null);
 
-  // Auto-fill collector from contract when contract is selected
+  // Filter kontrak berdasarkan kolektor yang dipilih (jika ada)
+  const filteredContracts = collectorId
+    ? contracts?.filter(c => c.collector_id === collectorId)
+    : contracts;
+
+  // Auto-fill collector from contract when contract is selected (jika belum diisi)
   useEffect(() => {
-    if (!contractId) {
-      setCollectorId("");
-      return;
-    }
-    
-    // Use collector assigned to the contract directly
+    if (!contractId) return;
     const contract = contracts?.find(c => c.id === contractId);
-    if (contract?.collector_id) {
+    if (contract?.collector_id && !collectorId) {
       setCollectorId(contract.collector_id);
     }
-  }, [contractId, contracts]);
+  }, [contractId, contracts, collectorId]);
+
+  // Reset kontrak jika tidak lagi sesuai filter kolektor
+  useEffect(() => {
+    if (!collectorId || !contractId) return;
+    const c = contracts?.find(x => x.id === contractId);
+    if (c && c.collector_id !== collectorId) {
+      setContractId("");
+      submittedRef.current = null;
+    }
+  }, [collectorId, contractId, contracts]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -311,8 +321,8 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
                     <CommandInput placeholder="Cari kontrak atau konsumen..." className="h-9" />
                     <CommandList>
                       <CommandEmpty>Tidak ditemukan.</CommandEmpty>
-                      <CommandGroup>
-                        {contracts?.map(c => (
+                       <CommandGroup>
+                         {filteredContracts?.map(c => (
                           <CommandItem 
                             key={c.id} 
                             value={`${c.contract_ref} ${c.customers?.name || ''}`} 
@@ -332,6 +342,11 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
                             </div>
                           </CommandItem>
                         ))}
+                        {filteredContracts?.length === 0 && collectorId && (
+                          <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                            Tidak ada kontrak untuk kolektor ini.
+                          </div>
+                        )}
                       </CommandGroup>
                     </CommandList>
                   </Command>

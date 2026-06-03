@@ -58,12 +58,16 @@ export const determineContractStatus = (input: ContractStatusInput): ContractSta
   if (input.status === 'completed') return 'completed';
   
   const lateDays = input.lateDays ?? 0;
+  const daysSinceLastPayment = input.daysSinceLastPayment ?? 0;
+
+  // Rule khusus: tidak ada pembayaran 6 hari berturut-turut => MACET
+  if (daysSinceLastPayment >= 6) return 'macet';
 
   // Klasifikasi berdasarkan hari keterlambatan kupon (1 kupon = 1 hari)
   if (lateDays <= 0) return 'sangat_lancar';
-  if (lateDays <= 3) return 'lancar';        // 1-3 hari
-  if (lateDays <= 20) return 'kurang_lancar'; // 4-20 hari
-  return 'macet';                              // > 20 hari
+  if (lateDays <= 3) return 'lancar';         // 1-3 hari
+  if (lateDays <= 19) return 'kurang_lancar'; // 4-19 hari
+  return 'macet';                              // >= 20 hari
 };
 
 /**

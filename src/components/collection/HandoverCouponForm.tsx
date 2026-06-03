@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Check, ChevronsUpDown, Send, Users, FileText, Calendar, MessageSquare, DollarSign, Hash, AlertCircle, CheckCircle2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Check, ChevronsUpDown, Send, Users, FileText, Calendar, MessageSquare, DollarSign, Hash, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,6 +57,7 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
   const startIndex = selectedContract ? selectedContract.current_installment_index + 1 : 1;
   const endIndex = startIndex + couponCount - 1;
   const maxCoupons = selectedContract ? selectedContract.tenor_days - selectedContract.current_installment_index : 0;
+  const submittedRef = useRef<string | null>(null);
 
   // Auto-fill collector from contract when contract is selected
   useEffect(() => {
@@ -72,8 +73,8 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
     }
   }, [contractId, contracts]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!collectorId || !contractId || couponCount < 1) {
       toast.error("Lengkapi semua field yang wajib diisi");
       return;
@@ -96,6 +97,16 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
     setCouponCount(1);
     setNotes("");
   };
+
+  // AUTO-SAVE: setelah kontrak dipilih (dan kolektor ter-resolve), simpan otomatis.
+  useEffect(() => {
+    if (!contractId || !collectorId || isSubmitting) return;
+    if (submittedRef.current === contractId) return;
+    if (!selectedContract || maxCoupons <= 0) return;
+    submittedRef.current = contractId;
+    void handleSubmit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contractId, collectorId, selectedContract?.id, maxCoupons, isSubmitting]);
 
   return (
     <Card className="shadow-sm border-0 bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20">
@@ -373,34 +384,21 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
             </div>
           </div>
 
-          {/* Enhanced Submit Section */}
-          <div className="flex flex-col sm:flex-row items-center gap-4 pt-4">
-            <div className="flex-1">
-              {selectedContract && couponCount > 0 && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                  <span>Siap untuk diserahkan: <strong>{couponCount} kupon</strong> senilai <strong>{formatRupiah(couponCount * selectedContract.daily_installment_amount)}</strong></span>
-                </div>
-              )}
-            </div>
-            <Button 
-              type="submit" 
-              disabled={isSubmitting || !collectorId || !contractId || maxCoupons <= 0}
-              className="h-12 px-8 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold shadow-lg"
-              size="lg"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="animate-spin h-4 w-4 mr-2 border-2 border-white/20 border-t-white rounded-full"></div>
-                  Menyimpan...
-                </>
-              ) : (
-                <>
-                  <Send className="mr-2 h-4 w-4" />
-                  Simpan Serah Terima
-                </>
-              )}
-            </Button>
+          {/* Status Auto-Save */}
+          <div className="flex items-center gap-3 pt-4 text-sm">
+            {isSubmitting ? (
+              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Menyimpan serah terima...</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <span>
+                  Pilih kontrak pada dropdown — serah terima akan otomatis tersimpan.
+                </span>
+              </div>
+            )}
           </div>
         </form>
       </CardContent>

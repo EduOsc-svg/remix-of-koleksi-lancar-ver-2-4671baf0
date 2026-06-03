@@ -92,9 +92,19 @@ export const useCreatePayment = () => {
       if (couponError) throw couponError;
 
       // Update contract's current_installment_index
+      const { data: ctRow, error: ctErr } = await supabase
+        .from('credit_contracts')
+        .select('tenor_days')
+        .eq('id', payment.contract_id)
+        .single();
+      if (ctErr) throw ctErr;
+      const isCompleted = payment.installment_index >= (ctRow?.tenor_days ?? 0);
       const { error: updateError } = await supabase
         .from('credit_contracts')
-        .update({ current_installment_index: payment.installment_index })
+        .update({
+          current_installment_index: payment.installment_index,
+          ...(isCompleted ? { status: 'completed' } : {}),
+        })
         .eq('id', payment.contract_id);
       if (updateError) throw updateError;
 
@@ -176,10 +186,20 @@ export const useCreateBulkPayment = () => {
         .lte('installment_index', endIndex);
       if (couponError) throw couponError;
 
-      // Update contract's current_installment_index to end index
+      // Update contract's current_installment_index to end index (auto-complete jika lunas)
+      const { data: ctRow2, error: ctErr2 } = await supabase
+        .from('credit_contracts')
+        .select('tenor_days')
+        .eq('id', contract_id)
+        .single();
+      if (ctErr2) throw ctErr2;
+      const isCompleted2 = endIndex >= (ctRow2?.tenor_days ?? 0);
       const { error: updateError } = await supabase
         .from('credit_contracts')
-        .update({ current_installment_index: endIndex })
+        .update({
+          current_installment_index: endIndex,
+          ...(isCompleted2 ? { status: 'completed' } : {}),
+        })
         .eq('id', contract_id);
       if (updateError) throw updateError;
 

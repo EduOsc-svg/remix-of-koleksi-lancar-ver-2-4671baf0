@@ -132,7 +132,77 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Enhanced Selection Row */}
+          {/* STEP 1: Input jumlah kupon, tanggal, catatan terlebih dahulu */}
+          <div className="rounded-lg border border-orange-200/60 dark:border-orange-800/40 bg-white/60 dark:bg-gray-900/40 p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Badge variant="outline" className="bg-orange-500 text-white border-orange-500">Langkah 1</Badge>
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Tentukan jumlah kupon, tanggal, dan catatan
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <Hash className="h-4 w-4 text-orange-500" />
+                  Jumlah Kupon <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={maxCoupons || 999}
+                  value={couponCount}
+                  onChange={e => setCouponCount(parseInt(e.target.value) || 1)}
+                  className="text-center font-semibold h-12 bg-white dark:bg-gray-900 border-orange-300 dark:border-orange-700"
+                />
+                {selectedContract && couponCount > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground font-medium">
+                      Kupon {startIndex} - {endIndex}
+                    </p>
+                    <p className="text-xs font-bold text-orange-600 dark:text-orange-400">
+                      Total: {formatRupiah(couponCount * selectedContract.daily_installment_amount)}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <Calendar className="h-4 w-4 text-purple-500" />
+                  Tanggal Serah Terima
+                </Label>
+                <Input
+                  type="date"
+                  value={handoverDate}
+                  onChange={e => setHandoverDate(e.target.value)}
+                  className="h-12 bg-white dark:bg-gray-900 border-purple-300 dark:border-purple-700"
+                />
+              </div>
+
+              <div className="space-y-3 lg:col-span-2">
+                <Label className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <MessageSquare className="h-4 w-4 text-indigo-500" />
+                  Catatan Tambahan
+                </Label>
+                <Input
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Catatan atau keterangan tambahan (opsional)"
+                  className="h-12 bg-white dark:bg-gray-900 border-indigo-300 dark:border-indigo-700"
+                />
+              </div>
+            </div>
+          </div>
+
+          <Separator className="my-2" />
+
+          {/* STEP 2: Pilih kontrak (auto-save) */}
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-green-500 text-white border-green-500">Langkah 2</Badge>
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Pilih kontrak — serah terima akan otomatis tersimpan
+            </span>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Kolektor Section */}
             <div className="space-y-3">
@@ -327,63 +397,6 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
             </div>
           )}
 
-          <Separator className="my-6" />
-
-          {/* Enhanced Input Section */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                <Hash className="h-4 w-4 text-orange-500" />
-                Jumlah Kupon <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="number"
-                min={1}
-                max={maxCoupons || 999}
-                value={couponCount}
-                onChange={e => setCouponCount(parseInt(e.target.value) || 1)}
-                className="text-center font-semibold h-12 bg-white dark:bg-gray-900 border-orange-300 dark:border-orange-700"
-                disabled={!selectedContract || maxCoupons <= 0}
-              />
-              {selectedContract && couponCount > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground font-medium">
-                    Kupon {startIndex} - {endIndex}
-                  </p>
-                  <p className="text-xs font-bold text-orange-600 dark:text-orange-400">
-                    Total: {formatRupiah(couponCount * selectedContract.daily_installment_amount)}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                <Calendar className="h-4 w-4 text-purple-500" />
-                Tanggal Serah Terima
-              </Label>
-              <Input 
-                type="date" 
-                value={handoverDate} 
-                onChange={e => setHandoverDate(e.target.value)} 
-                className="h-12 bg-white dark:bg-gray-900 border-purple-300 dark:border-purple-700"
-              />
-            </div>
-
-            <div className="space-y-3 lg:col-span-2">
-              <Label className="text-sm font-semibold flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                <MessageSquare className="h-4 w-4 text-indigo-500" />
-                Catatan Tambahan
-              </Label>
-              <Input 
-                value={notes} 
-                onChange={e => setNotes(e.target.value)} 
-                placeholder="Catatan atau keterangan tambahan (opsional)" 
-                className="h-12 bg-white dark:bg-gray-900 border-indigo-300 dark:border-indigo-700"
-              />
-            </div>
-          </div>
-
           {/* Status Auto-Save */}
           <div className="flex items-center gap-3 pt-4 text-sm">
             {isSubmitting ? (
@@ -395,7 +408,7 @@ export function HandoverCouponForm({ contracts, collectors, onSubmit, isSubmitti
               <div className="flex items-center gap-2 text-muted-foreground">
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
                 <span>
-                  Pilih kontrak pada dropdown — serah terima akan otomatis tersimpan.
+                  Isi jumlah kupon terlebih dahulu, lalu pilih kontrak — serah terima akan otomatis tersimpan.
                 </span>
               </div>
             )}

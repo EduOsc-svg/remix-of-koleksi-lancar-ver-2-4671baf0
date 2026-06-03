@@ -182,6 +182,10 @@ export function PrintCoupon8x5({ coupons, contract }: PrintCoupon8x5Props) {
         width: 26mm; 
         font-weight: normal;
       }
+      /* Narrow label variant for tighter label-value spacing (e.g. Rekening) */
+      .data-row .label.label-narrow {
+        width: 22mm; /* reduced from 26mm to bring value closer */
+      }
       .data-row .value { 
         font-weight: normal; 
       }
@@ -197,7 +201,6 @@ export function PrintCoupon8x5({ coupons, contract }: PrintCoupon8x5Props) {
 
       .red-text { 
         color: red; 
-      
       }
 
       .contract-code {
@@ -303,6 +306,7 @@ export function PrintCoupon8x5({ coupons, contract }: PrintCoupon8x5Props) {
   // Constants
   const REKENING_NUMBER = "0082-0100-3537-567";
   const KANTOR_NUMBER = "0821 8802 0656";
+  // Use the imported asset so rendering/load happens from the local assets folder
   const BG_IMAGE_URL = BG_IMAGE;
   
   // Preload background once and reuse as a data URL to avoid repeated network fetches
@@ -510,11 +514,11 @@ export function PrintCoupon8x5({ coupons, contract }: PrintCoupon8x5Props) {
                         </div>
             {/* Angsuran Ke row removed - included in No, Kupon field as installment/tenor/sales/collector */}
             <div className="data-row" >
-              <span className="label">Rekening BRI</span>
-              <span className="value red-text" >({REKENING_NUMBER})</span>
+              <span className="label label-narrow">Rekening BRI</span>
+              <span className="value red-text" style={{fontWeight:'bolder'}} >( {REKENING_NUMBER} )</span>
             </div>
             <div className="data-row">
-              <span className="label">A.N MUHAMMAD ZAYADI</span>
+              <span className="label">A.N SUMBER MUTIARA ELEKTRONIK</span>
             </div>
 
                     </div>

@@ -492,6 +492,19 @@ export function DailyDueList({
                   </div>
                 </AlertDescription>
               </Alert>
+
+              <div className="space-y-2">
+                <Label htmlFor="extra-note" className="text-sm font-medium">
+                  Catatan <span className="text-xs text-muted-foreground font-normal">(opsional)</span>
+                </Label>
+                <Textarea
+                  id="extra-note"
+                  value={extraNote}
+                  onChange={(e) => setExtraNote(e.target.value)}
+                  placeholder="Tambahkan alasan atau keterangan tambahan..."
+                  rows={3}
+                />
+              </div>
             </div>
           )}
 

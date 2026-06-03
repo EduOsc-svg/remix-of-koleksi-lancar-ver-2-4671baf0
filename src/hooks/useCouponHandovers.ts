@@ -70,7 +70,7 @@ export const useCreateCouponHandover = () => {
       try {
         const { data: contract, error: cErr } = await supabase
           .from('credit_contracts')
-          .select('daily_installment_amount, current_installment_index')
+          .select('daily_installment_amount, current_installment_index, tenor_days')
           .eq('id', data.contract_id)
           .single();
         if (cErr) throw cErr;
@@ -99,7 +99,10 @@ export const useCreateCouponHandover = () => {
 
         const { error: updErr } = await supabase
           .from('credit_contracts')
-          .update({ current_installment_index: data.end_index })
+          .update({
+            current_installment_index: data.end_index,
+            ...(data.end_index >= (contract.tenor_days ?? 0) ? { status: 'completed' } : {}),
+          })
           .eq('id', data.contract_id)
           .lt('current_installment_index', data.end_index);
         if (updErr) throw updErr;

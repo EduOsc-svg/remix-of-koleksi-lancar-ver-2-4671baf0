@@ -88,9 +88,20 @@ export const useContractStatusMap = () => {
         const unpaidInfo = unpaidByContract.get(ct.id) ?? { lateDays: 0, unpaidCount: 0 };
         const lastPay = lastPaymentByContract.get(ct.id) ?? null;
         const isCompleted = ct.status === 'completed' || unpaidInfo.unpaidCount === 0;
+        // Hari sejak pembayaran terakhir (untuk rule 6 hari -> macet)
+        let daysSinceLastPayment = 0;
+        if (lastPay) {
+          const last = new Date(lastPay);
+          last.setHours(0, 0, 0, 0);
+          daysSinceLastPayment = Math.max(
+            0,
+            Math.floor((today.getTime() - last.getTime()) / 86400000)
+          );
+        }
         const status = determineContractStatus({
           status: isCompleted ? 'completed' : ct.status,
           lateDays: unpaidInfo.lateDays,
+          daysSinceLastPayment,
         });
         map.set(ct.id, {
           status,

@@ -118,6 +118,18 @@ export default function CustomerHistory() {
       total_amount: number;
       count: number;
     }>;
+    // Extract a batch signature from a note. Bulk inserts (legacy + new) share
+    // a common range marker that we use as the grouping key.
+    //   - new format: "Kupon yang dibayar adalah 18 - 21"
+    //   - legacy:    "Pembayaran kupon 20 (batch 18-21)"
+    const batchKey = (note: string | null): string | null => {
+      if (!note) return null;
+      const m1 = note.match(/adalah\s+(\d+)\s*-\s*(\d+)/i);
+      if (m1) return `${m1[1]}-${m1[2]}`;
+      const m2 = note.match(/batch\s+(\d+)\s*-\s*(\d+)/i);
+      if (m2) return `${m2[1]}-${m2[2]}`;
+      return null;
+    };
     const sorted = [...payments].sort((a, b) => {
       if (a.payment_date !== b.payment_date) return a.payment_date < b.payment_date ? 1 : -1;
       return a.installment_index - b.installment_index;
@@ -131,15 +143,20 @@ export default function CustomerHistory() {
       end_index: number;
       total_amount: number;
       count: number;
+      _batch: string | null;
     }> = [];
     for (const p of sorted) {
       const last = groups[groups.length - 1];
+      const pBatch = batchKey(p.notes);
       const sameGroup =
         last &&
         last.payment_date === p.payment_date &&
-        (last.notes || '') === (p.notes || '') &&
         (last.collectors?.name || '') === (p.collectors?.name || '') &&
-        p.installment_index === last.end_index + 1;
+        p.installment_index === last.end_index + 1 &&
+        // Merge when both rows belong to the same batch range, OR when neither
+        // has a batch marker and their notes match (single sequential entries).
+        ((pBatch !== null && pBatch === last._batch) ||
+          (pBatch === null && last._batch === null && (last.notes || '') === (p.notes || '')));
       if (sameGroup) {
         last.end_index = p.installment_index;
         last.total_amount += Number(p.amount_paid);
@@ -154,10 +171,19 @@ export default function CustomerHistory() {
           end_index: p.installment_index,
           total_amount: Number(p.amount_paid),
           count: 1,
+          _batch: pBatch,
         });
       }
     }
-    return groups;
+    // For grouped (count > 1) rows, normalize the displayed note to the
+    // canonical range format so legacy per-coupon notes do not leak through.
+    return groups.map((g) => ({
+      ...g,
+      notes:
+        g.count > 1
+          ? `Kupon yang dibayar adalah ${g.start_index} - ${g.end_index}`
+          : g.notes,
+    }));
   }, [payments]);
 
   // Add pagination for grouped payments

@@ -198,21 +198,15 @@ export default function Dashboard() {
   }, [monthlyData?.total_modal, monthlyData?.total_omset]);
 
   // ===== YEARLY DERIVED VALUES =====
-  // Komisi tahunan (12 bulan) — sum dari kolom Komisi halaman Agen Sales (mode tahunan).
-  // Dihitung ulang lokal dari tier × omset agen, TANPA bonus tahunan 0.8%.
-  // Identik dengan nilai per baris yang ditampilkan di tabel Agen Sales.
+  // Komisi tahunan (12 bulan) — gunakan bonus 0.8% saja (NO tier calculation untuk tahunan).
+  // Formula: Total Omset Tahunan × 0.8%
+  // Catatan: Tier calculation hanya untuk bulanan. Tahunan hanya menggunakan bonus 0.8%.
   const yearlyCommissionTotal = useMemo(() => {
-    const list = yearlyFinancial?.agents;
-    if (!Array.isArray(list) || list.length === 0) return 0;
-    return list.reduce((sum, a) => {
-      const omset = a.total_omset || 0;
-      if (omset <= 0) return sum;
-      const pct = commissionTiers && commissionTiers.length > 0
-        ? calculateTieredCommission(omset, commissionTiers)
-        : (a.commission_percentage || 0);
-      return sum + (omset * pct) / 100;
-    }, 0);
-  }, [yearlyFinancial?.agents, commissionTiers]);
+    const totalOmset = yearlyFinancial?.total_omset || 0;
+    if (totalOmset <= 0) return 0;
+    const YEARLY_BONUS_PERCENTAGE = 0.8; // Bonus tetap 0.8% untuk tahunan
+    return (totalOmset * YEARLY_BONUS_PERCENTAGE) / 100;
+  }, [yearlyFinancial?.total_omset]);
 
   // Margin kotor tahunan: (omset - modal) / modal * 100
   const yearlyGrossProfitMargin = useMemo(() => {
@@ -955,7 +949,7 @@ export default function Dashboard() {
                               <TableCell>
                                 <div>
                                   <p className="font-medium">{agent.agent_code}</p>
-                                  <p className="text-xs text-muted-foreground">{agent.agent_name} • {agent.contracts_count} kontrak • {agent.commission_percentage?.toFixed(1) || 0}%</p>
+                                  <p className="text-xs text-muted-foreground">{agent.agent_name} • {agent.contracts_count} kontrak • 0.8% bonus</p>
                                 </div>
                               </TableCell>
                               <TableCell className="text-right text-blue-600">{formatRupiah(agent.total_modal)}</TableCell>

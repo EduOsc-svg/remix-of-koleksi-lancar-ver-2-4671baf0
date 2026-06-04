@@ -266,18 +266,19 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
         if (md) md.collected += amt;
       });
 
-      // KOMISI TAHUNAN: gunakan TIERED COMMISSION berdasarkan total omset per agent
-      // Rumus: cari tier yang sesuai dengan total_omset_tahunan_agent, ambil commission percentage,
-      // lalu hitung komisi_agent = total_omset_tahunan_agent × percentage_tier / 100
+      // KOMISI TAHUNAN: gunakan BONUS 0.8% saja (tanpa tiered commission untuk tahunan).
+      // Rumus: Total omset tahunan semua agen × 0.8%
+      // Catatan: Tier calculation hanya untuk bulanan. Tahunan HANYA menggunakan bonus 0.8%.
       let totalCommission = 0;
+      const YEARLY_BONUS_PERCENTAGE = 0.8;
       const agentYearlyCommission = new Map<string, number>();
       const agentCommissionPct = new Map<string, number>();
 
       agentYearlyOmset.forEach((omset, agentId) => {
-        const commissionPct = calculateTieredCommission(omset, tiers);
-        const commission = (omset * commissionPct) / 100;
+        // Tahunan: cukup gunakan bonus 0.8%, bukan tier calculation
+        const commission = (omset * YEARLY_BONUS_PERCENTAGE) / 100;
         agentYearlyCommission.set(agentId, commission);
-        agentCommissionPct.set(agentId, commissionPct);
+        agentCommissionPct.set(agentId, YEARLY_BONUS_PERCENTAGE);
         totalCommission += commission;
       });
 

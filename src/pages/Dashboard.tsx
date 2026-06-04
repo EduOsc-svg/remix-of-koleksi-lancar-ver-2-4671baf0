@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMonthlyPerformance, useYearlyTarget } from "@/hooks/useMonthlyPerformance";
 import { useYearlyFinancialSummary } from "@/hooks/useYearlyFinancialSummary";
+import { useCommissionTiers, calculateTieredCommission } from "@/hooks/useCommissionTiers";
 import { useContracts } from '@/hooks/useContracts';
 import { useOperationalExpenses, useOperationalExpenseMutations, OperationalExpenseInput } from "@/hooks/useOperationalExpenses";
 import { useOperationalExpenseTotals, useOperationalExpenseTotalsYearly } from '@/hooks/useOperationalExpenseTotals';

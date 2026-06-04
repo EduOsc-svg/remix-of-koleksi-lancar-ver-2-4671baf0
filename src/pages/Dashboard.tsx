@@ -369,7 +369,7 @@ export default function Dashboard() {
           value={monthlyData?.total_to_collect ?? 0}
           valueColor="text-red-600"
           subtitle="Kontrak baru bulan ini"
-          hoverInfo={`Sisa tagihan dari kontrak yang dibuat bulan ini.\nRumus per kontrak: (Cicilan harian × Tenor) − Total Pembayaran (ALL TIME).\n\nKlik Detail untuk lihat per sales & per kontrak.`}
+          hoverInfo={`Sisa tagihan dari kontrak yang dibuat bulan ini.\nRumus per kontrak: Total Nilai Kontrak (total_loan_amount) − Total Pembayaran (ALL TIME).\nSinkron dengan rumus tahunan.\n\nKlik Detail untuk lihat per sales & per kontrak.`}
           onDetailClick={() => { setOutstandingDetailScope('monthly'); setOutstandingDetailOpen(true); }}
         />
 

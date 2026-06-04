@@ -503,20 +503,24 @@ export function PrintCoupon8x5({ coupons, contract }: PrintCoupon8x5Props) {
               <span className="label">No HP</span>
               <span className="value">: {contract.customers?.phone || '-'}</span>
             </div>
+
                         <div className="data-row">
                             <span className="label">Alamat</span>
                             <span className="value value-alamat">: {truncatedAddressForPrint}</span>
                             
                         </div>
+
                         <div className="data-row">
                             <span className="label">Jatuh Tempo</span>
                             <span className="value">: {formatDate(coupon.due_date)}</span>
                         </div>
+
             {/* Angsuran Ke row removed - included in No, Kupon field as installment/tenor/sales/collector */}
             <div className="data-row" >
               <span className="label label-narrow">Rekening BRI</span>
               <span className="value red-text" style={{fontWeight:'bolder'}} >( {REKENING_NUMBER} )</span>
             </div>
+            
             <div className="data-row">
               <span className="label">A.N SUMBER MUTIARA ELEKTRONIK</span>
             </div>

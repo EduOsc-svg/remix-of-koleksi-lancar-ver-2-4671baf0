@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, differenceInDays } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
+import { determineContractStatus, calculateLateDays, calculateDaysSinceLastPayment } from '@/lib/statusCalculation';
 
 /**
  * Ringkasan kontrak MACET (status dinamis) — bukan returned.
@@ -38,19 +39,6 @@ export interface MacetBySales {
   total_outstanding: number;
 }
 
-const calcDynamicStatus = (c: any): 'completed' | 'lancar' | 'kurang_lancar' | 'macet' => {
-  if (c.status === 'completed') return 'completed';
-  const daysSinceCreation = differenceInDays(new Date(), new Date(c.created_at));
-  const installmentsPaid = c.current_installment_index || 0;
-  if (installmentsPaid === 0) {
-    return daysSinceCreation > 7 ? 'macet' : daysSinceCreation > 3 ? 'kurang_lancar' : 'lancar';
-  }
-  const ratio = daysSinceCreation / installmentsPaid;
-  if (ratio <= 1.2) return 'lancar';
-  if (ratio <= 2.0) return 'kurang_lancar';
-  return 'macet';
-};
-
 const fetchMacet = async (rangeStart: string, rangeEnd: string): Promise<MacetSummary> => {
   const { data: contracts, error } = await supabase
     .from('credit_contracts')
@@ -61,7 +49,53 @@ const fetchMacet = async (rangeStart: string, rangeEnd: string): Promise<MacetSu
     .lte('start_date', rangeEnd);
   if (error) throw error;
 
-  const macetContracts = (contracts || []).filter((c: any) => calcDynamicStatus(c) === 'macet');
+  const allIds = (contracts || []).map((c: any) => c.id);
+
+  // Real-time: ambil kupon unpaid (earliest due_date) & last payment per kontrak
+  const [{ data: unpaidCoupons, error: cErr }, { data: lastPays, error: lpErr }] = await Promise.all([
+    allIds.length
+      ? supabase
+          .from('installment_coupons')
+          .select('contract_id, due_date')
+          .eq('status', 'unpaid')
+          .in('contract_id', allIds)
+      : Promise.resolve({ data: [], error: null } as any),
+    allIds.length
+      ? supabase
+          .from('payment_logs')
+          .select('contract_id, payment_date')
+          .in('contract_id', allIds)
+          .order('payment_date', { ascending: false })
+      : Promise.resolve({ data: [], error: null } as any),
+  ]);
+  if (cErr) throw cErr;
+  if (lpErr) throw lpErr;
+
+  const nextUnpaidByContract = new Map<string, string>();
+  (unpaidCoupons || []).forEach((c: any) => {
+    const prev = nextUnpaidByContract.get(c.contract_id);
+    if (!prev || c.due_date < prev) nextUnpaidByContract.set(c.contract_id, c.due_date);
+  });
+
+  const lastPaymentByContract = new Map<string, string>();
+  (lastPays || []).forEach((p: any) => {
+    if (!lastPaymentByContract.has(p.contract_id)) {
+      lastPaymentByContract.set(p.contract_id, p.payment_date);
+    }
+  });
+
+  // Hanya kontrak yang benar-benar MACET berdasarkan determineContractStatus
+  const macetContracts = (contracts || []).filter((c: any) => {
+    const lateDays = calculateLateDays(nextUnpaidByContract.get(c.id));
+    const daysSinceLastPayment = calculateDaysSinceLastPayment(lastPaymentByContract.get(c.id));
+    const status = determineContractStatus({
+      status: c.status,
+      lateDays,
+      daysSinceLastPayment,
+      createdAt: c.created_at,
+    });
+    return status === 'macet';
+  });
   const ids = macetContracts.map((c: any) => c.id);
 
   const paidMap = new Map<string, number>();
@@ -81,7 +115,8 @@ const fetchMacet = async (rangeStart: string, rangeEnd: string): Promise<MacetSu
   const detailList: MacetContractDetail[] = [];
   const salesAgg = new Map<string, MacetBySales>();
   macetContracts.forEach((c: any) => {
-    const contractTotal = Number(c.daily_installment_amount || 0) * Number(c.tenor_days || 0);
+    // Sinkron dengan rumus sisa tagihan di hook lain
+    const contractTotal = Number(c.total_loan_amount || 0);
     const paid = paidMap.get(c.id) || 0;
     const outstanding = Math.max(0, contractTotal - paid);
     const modal = Number(c.omset || 0);

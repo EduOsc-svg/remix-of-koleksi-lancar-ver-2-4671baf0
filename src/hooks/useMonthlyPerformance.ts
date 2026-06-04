@@ -130,8 +130,8 @@ export const useMonthlyPerformance = (month: Date = new Date()) => {
         collectedByAgent.set(agentId, (collectedByAgent.get(agentId) || 0) + Number(p.amount_paid || 0));
       });
 
-      // Sisa Tagihan = SUM(daily_installment_amount × tenor_days - paid_amount) per kontrak
-      // dari kontrak yang dibuat bulan ini
+      // Sisa Tagihan = SUM(total_loan_amount - paid_amount ALL TIME) per kontrak
+      // dari kontrak yang dibuat bulan ini. Disinkronkan dengan rumus tahunan.
       const paidByContract = new Map<string, number>();
       (allPayments || []).forEach((p: any) => {
         paidByContract.set(p.contract_id, (paidByContract.get(p.contract_id) || 0) + Number(p.amount_paid || 0));
@@ -139,7 +139,7 @@ export const useMonthlyPerformance = (month: Date = new Date()) => {
 
       let totalSisaTagihan = 0;
       (contracts || []).forEach((c: any) => {
-        const contractTotal = Number(c.daily_installment_amount || 0) * Number(c.tenor_days || 0);
+        const contractTotal = Number(c.total_loan_amount || 0);
         const paidAmount = paidByContract.get(c.id) || 0;
         const sisaKontrak = Math.max(0, contractTotal - paidAmount);
         totalSisaTagihan += sisaKontrak;

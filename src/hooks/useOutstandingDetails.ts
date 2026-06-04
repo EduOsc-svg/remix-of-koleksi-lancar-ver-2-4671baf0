@@ -62,7 +62,7 @@ const fetchOutstandingDetails = async (
   ] = await Promise.all([
     supabase
       .from('credit_contracts')
-      .select('id, contract_ref, start_date, status, sales_agent_id, daily_installment_amount, tenor_days, customers(name, phone)')
+      .select('id, contract_ref, start_date, status, sales_agent_id, total_loan_amount, daily_installment_amount, tenor_days, customers(name, phone)')
       .neq('status', 'returned')
       .gte('start_date', start)
       .lte('start_date', end),
@@ -89,7 +89,8 @@ const fetchOutstandingDetails = async (
   let totalPaid = 0;
 
   (contracts || []).forEach((c: any) => {
-    const contractTotal = Number(c.daily_installment_amount || 0) * Number(c.tenor_days || 0);
+    // Sinkron dengan useMonthlyPerformance & useYearlyFinancialSummary
+    const contractTotal = Number(c.total_loan_amount || 0);
     const paid = paidByContract.get(c.id) || 0;
     const outstanding = Math.max(0, contractTotal - paid);
     if (outstanding <= 0) return; // Hanya yang masih punya sisa

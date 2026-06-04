@@ -196,19 +196,15 @@ export default function Dashboard() {
   }, [monthlyData?.total_modal, monthlyData?.total_omset]);
 
   // ===== YEARLY DERIVED VALUES =====
-  // Komisi tahunan (12 bulan): gunakan nilai authoritative dari yearlyFinancial jika tersedia
-  // Ini merepresentasikan total komisi selama 12 bulan untuk periode tahun terpilih.
+  // Komisi tahunan (12 bulan) — sumber tunggal: data Sales Agents (yearlyFinancial.agents).
+  // Sama persis dengan kolom Komisi di halaman Agen Sales (mode tahunan).
   const yearlyCommissionTotal = useMemo(() => {
-    // Prefer summing the monthly breakdown commission values (Jan..Dec)
-    const monthly = yearlyFinancial?.monthly_breakdown;
-    if (monthly && Array.isArray(monthly) && monthly.length > 0) {
-      return monthly.reduce((s, m) => s + (m.commission || 0), 0);
+    const list = yearlyFinancial?.agents;
+    if (Array.isArray(list) && list.length > 0) {
+      return list.reduce((s, a) => s + (a.total_commission || 0), 0);
     }
-    // Fallback to any authoritative total_commission field if present
-    const fromSummary = yearlyFinancial?.total_commission;
-    if (typeof fromSummary === 'number') return fromSummary;
-    return 0;
-  }, [yearlyFinancial?.monthly_breakdown, yearlyFinancial?.total_commission]);
+    return yearlyFinancial?.total_commission ?? 0;
+  }, [yearlyFinancial?.agents, yearlyFinancial?.total_commission]);
 
   // Margin kotor tahunan: (omset - modal) / modal * 100
   const yearlyGrossProfitMargin = useMemo(() => {
@@ -759,7 +755,7 @@ export default function Dashboard() {
                   value={yearlyCommissionTotal}
                   valueColor="text-purple-600"
                   subtitle={`Total komisi 12 bulan (${selectedYear.getFullYear()})`}
-                  hoverInfo={`Total komisi dari seluruh bulan (Jan-Des) tahun ${selectedYear.getFullYear()} yang dihitung per agent berdasarkan omset & tier komisi masing-masing. Diambil langsung dari monthly breakdown real data.`}
+                  hoverInfo={`Total komisi tahun ${selectedYear.getFullYear()} — sumber: halaman Agen Sales (mode tahunan). Sum dari kolom Komisi setiap sales agent.`}
                 />
 
                 <StatCard

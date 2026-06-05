@@ -11,9 +11,9 @@ export interface OutstandingContractDetail {
   sales_name: string;
   sales_code: string;
   start_date: string;
-  contract_total: number;     // daily_installment_amount × tenor_days
-  paid_amount: number;        // ALL TIME payments
-  outstanding: number;        // contract_total − paid_amount (>=0)
+  contract_total: number;     // Tagihan periode (sum coupon.amount due dalam periode)
+  paid_amount: number;        // Tertagih periode (sum payment_logs dalam periode)
+  outstanding: number;        // max(0, contract_total − paid_amount)
   status: string;
 }
 
@@ -40,9 +40,11 @@ export interface OutstandingDetailsSummary {
 
 /**
  * Detail sisa tagihan per kontrak untuk periode (bulan/tahun).
- * Selaras dengan rumus di useMonthlyPerformance & useYearlyFinancialSummary:
- *   Sisa = (daily_installment_amount × tenor_days) − pembayaran ALL TIME
- *   Hanya kontrak start_date di periode, status != 'returned'.
+ * SINKRON dengan tab Keuntungan Harian:
+ *   Tagihan periode  = SUM(installment_coupons.amount WHERE due_date dalam periode)
+ *   Tertagih periode = SUM(payment_logs.amount_paid WHERE payment_date dalam periode)
+ *   Sisa Tagihan     = max(0, Tagihan periode − Tertagih periode)
+ * Mencakup SEMUA kontrak aktif yang punya kupon jatuh tempo di periode tsb.
  */
 const fetchOutstandingDetails = async (
   scope: 'monthly' | 'yearly',
@@ -57,26 +59,40 @@ const fetchOutstandingDetails = async (
 
   const [
     { data: contracts, error: cErr },
-    { data: allPayments, error: pErr },
+    { data: periodPayments, error: pErr },
+    { data: periodCoupons, error: cpErr },
     { data: agents, error: aErr },
   ] = await Promise.all([
     supabase
       .from('credit_contracts')
       .select('id, contract_ref, start_date, status, sales_agent_id, total_loan_amount, daily_installment_amount, tenor_days, customers(name, phone)')
-      .neq('status', 'returned')
-      .gte('start_date', start)
-      .lte('start_date', end),
-    supabase.from('payment_logs').select('amount_paid, contract_id'),
+      .neq('status', 'returned'),
+    supabase
+      .from('payment_logs')
+      .select('amount_paid, contract_id, payment_date')
+      .gte('payment_date', start)
+      .lte('payment_date', end),
+    supabase
+      .from('installment_coupons')
+      .select('contract_id, amount, due_date')
+      .gte('due_date', start)
+      .lte('due_date', end),
     supabase.from('sales_agents').select('id, name, agent_code'),
   ]);
 
   if (cErr) throw cErr;
   if (pErr) throw pErr;
+  if (cpErr) throw cpErr;
   if (aErr) throw aErr;
 
   const paidByContract = new Map<string, number>();
-  (allPayments || []).forEach((p: any) => {
+  (periodPayments || []).forEach((p: any) => {
     paidByContract.set(p.contract_id, (paidByContract.get(p.contract_id) || 0) + Number(p.amount_paid || 0));
+  });
+
+  const tagihanByContract = new Map<string, number>();
+  (periodCoupons || []).forEach((c: any) => {
+    tagihanByContract.set(c.contract_id, (tagihanByContract.get(c.contract_id) || 0) + Number(c.amount || 0));
   });
 
   const agentLookup = new Map<string, { name: string; code: string }>();
@@ -88,11 +104,17 @@ const fetchOutstandingDetails = async (
   let totalContractValue = 0;
   let totalPaid = 0;
 
+  // Kontrak yang relevan = punya tagihan atau pembayaran di periode
+  const relevantContractIds = new Set<string>([
+    ...tagihanByContract.keys(),
+    ...paidByContract.keys(),
+  ]);
+
   (contracts || []).forEach((c: any) => {
-    // Sinkron dengan useMonthlyPerformance & useYearlyFinancialSummary
-    const contractTotal = Number(c.total_loan_amount || 0);
+    if (!relevantContractIds.has(c.id)) return;
+    const tagihan = tagihanByContract.get(c.id) || 0;
     const paid = paidByContract.get(c.id) || 0;
-    const outstanding = Math.max(0, contractTotal - paid);
+    const outstanding = Math.max(0, tagihan - paid);
     if (outstanding <= 0) return; // Hanya yang masih punya sisa
 
     const agentInfo = c.sales_agent_id ? agentLookup.get(c.sales_agent_id) : null;
@@ -108,14 +130,14 @@ const fetchOutstandingDetails = async (
       sales_name: salesName,
       sales_code: salesCode,
       start_date: c.start_date,
-      contract_total: contractTotal,
+      contract_total: tagihan,
       paid_amount: paid,
       outstanding,
       status: c.status,
     });
 
     totalOutstanding += outstanding;
-    totalContractValue += contractTotal;
+    totalContractValue += tagihan;
     totalPaid += paid;
 
     const key = c.sales_agent_id || 'none';
@@ -130,7 +152,7 @@ const fetchOutstandingDetails = async (
     };
     existing.contract_count += 1;
     existing.total_outstanding += outstanding;
-    existing.total_contract += contractTotal;
+    existing.total_contract += tagihan;
     existing.total_paid += paid;
     bySalesMap.set(key, existing);
   });

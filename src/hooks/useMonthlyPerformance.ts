@@ -41,10 +41,10 @@ export interface YearlyTargetData {
  * total_collected = uang masuk AKTUAL di bulan ini (cash) — info pelengkap.
  * Komisi: tier diterapkan ke total omset (full kontrak) per agen di bulan ini.
  * 
- * SISA TAGIHAN (total_to_collect):
- * - Dihitung PER KONTRAK dari kontrak yang dibuat bulan ini
- * - Per kontrak: Sisa Tagihan = Total Nilai Kontrak (total_loan_amount) - Total Pembayaran (ALL TIME)
- * - Agregat: Sum dari sisa tagihan semua kontrak bulan itu yang masih memiliki sisa
+ * SISA TAGIHAN (total_to_collect) — SINKRON dengan tab Keuntungan Harian:
+ *   Tagihan periode  = SUM(installment_coupons.amount WHERE due_date dalam bulan)
+ *   Tertagih periode = SUM(payment_logs.amount_paid WHERE payment_date dalam bulan)
+ *   Sisa Tagihan     = max(0, Tagihan periode − Tertagih periode)
  */
 export const useMonthlyPerformance = (month: Date = new Date()) => {
   const monthStart = format(startOfMonth(month), 'yyyy-MM-dd');
@@ -57,7 +57,7 @@ export const useMonthlyPerformance = (month: Date = new Date()) => {
   { data: agents, error: agentsError },
   { data: contracts, error: contractsError },
   { data: paymentsThisMonth, error: paymentsError },
-  { data: allPayments, error: allPaymentsError },
+  { data: couponsThisMonth, error: couponsError },
   { data: tiersData, error: tiersError },
       ] = await Promise.all([
         supabase.from('sales_agents').select('id, name, agent_code').order('name'),
@@ -73,15 +73,17 @@ export const useMonthlyPerformance = (month: Date = new Date()) => {
           .gte('payment_date', monthStart)
           .lte('payment_date', monthEnd),
         supabase
-          .from('payment_logs')
-          .select('amount_paid, contract_id'),
+          .from('installment_coupons')
+          .select('amount, due_date, contract_id')
+          .gte('due_date', monthStart)
+          .lte('due_date', monthEnd),
         supabase.from('commission_tiers').select('*').order('min_amount', { ascending: true }),
       ]);
 
       if (agentsError) throw agentsError;
       if (contractsError) throw contractsError;
       if (paymentsError) throw paymentsError;
-      if (allPaymentsError) throw allPaymentsError;
+      if (couponsError) throw couponsError;
       if (tiersError) throw tiersError;
 
       const tiers: CommissionTier[] = (tiersData || []) as CommissionTier[];
@@ -130,20 +132,17 @@ export const useMonthlyPerformance = (month: Date = new Date()) => {
         collectedByAgent.set(agentId, (collectedByAgent.get(agentId) || 0) + Number(p.amount_paid || 0));
       });
 
-      // Sisa Tagihan = SUM(total_loan_amount - paid_amount ALL TIME) per kontrak
-      // dari kontrak yang dibuat bulan ini. Disinkronkan dengan rumus tahunan.
-      const paidByContract = new Map<string, number>();
-      (allPayments || []).forEach((p: any) => {
-        paidByContract.set(p.contract_id, (paidByContract.get(p.contract_id) || 0) + Number(p.amount_paid || 0));
-      });
-
-      let totalSisaTagihan = 0;
-      (contracts || []).forEach((c: any) => {
-        const contractTotal = Number(c.total_loan_amount || 0);
-        const paidAmount = paidByContract.get(c.id) || 0;
-        const sisaKontrak = Math.max(0, contractTotal - paidAmount);
-        totalSisaTagihan += sisaKontrak;
-      });
+      // Sinkron dengan Keuntungan Harian:
+      //   Tagihan periode  = SUM coupon.amount due dalam bulan ini
+      //   Tertagih periode = SUM payment_logs.amount_paid dalam bulan ini
+      //   Sisa Tagihan     = max(0, Tagihan − Tertagih)
+      const totalTagihanPeriode = (couponsThisMonth || []).reduce(
+        (s: number, c: any) => s + Number(c.amount || 0), 0
+      );
+      const totalTertagihPeriode = (paymentsThisMonth || []).reduce(
+        (s: number, p: any) => s + Number(p.amount_paid || 0), 0
+      );
+      const totalSisaTagihan = Math.max(0, totalTagihanPeriode - totalTertagihPeriode);
 
       const agentResults: MonthlyPerformanceData[] = (agents || []).map((agent) => {
         const data = agentDataMap.get(agent.id);
@@ -177,7 +176,7 @@ export const useMonthlyPerformance = (month: Date = new Date()) => {
       const total_omset = agentResults.reduce((s, a) => s + a.total_omset, 0);
       const total_profit = agentResults.reduce((s, a) => s + a.profit, 0);
       const total_commission = agentResults.reduce((s, a) => s + a.total_commission, 0);
-      const total_collected = agentResults.reduce((s, a) => s + a.total_collected, 0);
+      const total_collected = totalTertagihPeriode;
       const total_to_collect = totalSisaTagihan;
       const profit_margin = total_modal > 0 ? (total_profit / total_modal) * 100 : 0;
 

@@ -119,7 +119,7 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
         supabase.from('payment_logs').select('amount_paid, contract_id'),
         supabase.from('operational_expenses').select('amount, expense_date, description, category').gte('expense_date', yearStart).lte('expense_date', yearEnd),
         supabase.from('commission_tiers').select('*').order('min_amount', { ascending: true }),
-        supabase.from('installment_coupons').select('contract_id, due_date, status, installment_index'),
+        supabase.from('installment_coupons').select('contract_id, due_date, status, installment_index, amount'),
         supabase.from('payment_logs').select('contract_id, payment_date').order('payment_date', { ascending: false }),
       ]);
 

@@ -776,8 +776,8 @@ export default function Dashboard() {
                   label="Sisa Tagihan"
                   value={yearlyFinancial?.total_to_collect ?? 0}
                   valueColor="text-red-600"
-                  subtitle="Tagihan periode − Tertagih periode"
-                  hoverInfo={`Sisa tagihan tahun ${selectedYear.getFullYear()}, sinkron dengan tab Keuntungan Harian.\nRumus: Tagihan periode − Tertagih periode\n  • Tagihan = SUM kupon yang jatuh tempo di tahun ini\n  • Tertagih = SUM pembayaran yang masuk di tahun ini\nTotal sisa: ${formatRupiah(yearlyFinancial?.total_to_collect ?? 0)}\n\nKlik Detail untuk lihat per sales & per kontrak.`}
+                  subtitle="Kupon belum dibayar dari kontrak tahun ini"
+                  hoverInfo={`Sisa tagihan untuk kontrak yang dibuat di tahun ${selectedYear.getFullYear()}.\nRumus: SUM(kupon UNPAID) untuk semua kontrak dengan start_date di tahun ini.\nIni adalah total dari Sisa Tagihan semua bulan di tahun ini.\nTotal sisa: ${formatRupiah(yearlyFinancial?.total_to_collect ?? 0)}\n\nKlik Detail untuk lihat per sales & per kontrak.`}
                   onDetailClick={() => { setOutstandingDetailScope('yearly'); setOutstandingDetailOpen(true); }}
                 />
 

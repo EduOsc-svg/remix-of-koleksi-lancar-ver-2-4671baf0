@@ -88,7 +88,9 @@ export interface YearlyFinancialSummary {
  *   cicilan yang BELUM dibayar (status = 'unpaid').
  * - Konsisten dengan Sisa Tagihan bulanan (yaitu sum dari semua bulan dlm tahun ini).
  * 
- * total_collected: Uang yang tertagih tahun ini (cash).
+ * TERTAGIH (total_collected) — KONTRAK BARU TAHUN INI:
+ * - Untuk kontrak yang start_date-nya di tahun ini, jumlahkan semua kupon
+ *   cicilan yang SUDAH dibayar (status = 'paid'). Simetris dengan Sisa Tagihan.
  * 
  * Status Kontrak (NEW):
  * - sangat_lancar: Tidak ada keterlambatan sama sekali (0 hari terlambat)

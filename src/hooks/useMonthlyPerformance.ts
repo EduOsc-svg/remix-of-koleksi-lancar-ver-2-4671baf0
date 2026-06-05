@@ -38,7 +38,11 @@ export interface YearlyTargetData {
 /**
  * Performa bulanan — CONTRACT BASIS.
  * Omset/Modal/Profit diakui PENUH untuk setiap kontrak yang start_date nya di bulan ini.
- * total_collected = uang masuk AKTUAL di bulan ini (cash) — info pelengkap.
+ * total_collected (TERTAGIH) — KONTRAK BARU BULAN INI:
+ *   Untuk kontrak yang start_date-nya di bulan ini, jumlahkan semua kupon
+ *   cicilan yang SUDAH dibayar (status = 'paid').
+ *   Rumus: SUM(installment_coupons.amount WHERE status='paid' AND contract_id IN kontrak_bulan_ini)
+ *   (Simetris dengan Sisa Tagihan.)
  * Komisi: tier diterapkan ke total omset (full kontrak) per agen di bulan ini.
  * 
  * SISA TAGIHAN (total_to_collect) — KONTRAK BARU BULAN INI:
@@ -125,23 +129,22 @@ export const useMonthlyPerformance = (month: Date = new Date()) => {
         collectedByAgent.set(agentId, (collectedByAgent.get(agentId) || 0) + Number(p.amount_paid || 0));
       });
 
-      // Sisa Tagihan bulanan = sum kupon UNPAID dari kontrak yg dibuat bulan ini
+      // Sisa Tagihan & Tertagih bulanan = sum kupon dari kontrak yg dibuat bulan ini (simetris)
       const contractIdsThisMonth = (contracts || []).map((c: any) => c.id);
       let totalSisaTagihan = 0;
+      let totalTertagihPeriode = 0;
       if (contractIdsThisMonth.length > 0) {
-        const { data: unpaidCoupons, error: unpaidErr } = await supabase
+        const { data: monthCoupons, error: couponsErr } = await supabase
           .from('installment_coupons')
-          .select('amount')
-          .eq('status', 'unpaid')
+          .select('amount, status')
           .in('contract_id', contractIdsThisMonth);
-        if (unpaidErr) throw unpaidErr;
-        totalSisaTagihan = (unpaidCoupons || []).reduce(
-          (s: number, c: any) => s + Number(c.amount || 0), 0
-        );
+        if (couponsErr) throw couponsErr;
+        (monthCoupons || []).forEach((c: any) => {
+          const amt = Number(c.amount || 0);
+          if (c.status === 'unpaid') totalSisaTagihan += amt;
+          else if (c.status === 'paid') totalTertagihPeriode += amt;
+        });
       }
-      const totalTertagihPeriode = (paymentsThisMonth || []).reduce(
-        (s: number, p: any) => s + Number(p.amount_paid || 0), 0
-      );
 
       const agentResults: MonthlyPerformanceData[] = (agents || []).map((agent) => {
         const data = agentDataMap.get(agent.id);

@@ -361,7 +361,7 @@ export default function Dashboard() {
           value={totalCollected}
           valueColor="text-teal-600"
           subtitle="Pembayaran masuk bulan ini"
-          hoverInfo="Total uang yang benar-benar tertagih (cash inflow) dari pembayaran yang masuk bulan ini, lintas semua kontrak."
+          hoverInfo="Total uang yang benar-benar tertagih (cash inflow) dari pembayaran yang masuk bulan ini, lintas semua kontrak. Sinkron dengan kolom Tertagih di tab Keuntungan Harian."
         />
 
         <StatCard
@@ -370,8 +370,8 @@ export default function Dashboard() {
           label="Sisa Tagihan"
           value={monthlyData?.total_to_collect ?? 0}
           valueColor="text-red-600"
-          subtitle="Kontrak baru bulan ini"
-          hoverInfo={`Sisa tagihan dari kontrak yang dibuat bulan ini.\nRumus per kontrak: Total Nilai Kontrak (total_loan_amount) − Total Pembayaran (ALL TIME).\nSinkron dengan rumus tahunan.\n\nKlik Detail untuk lihat per sales & per kontrak.`}
+          subtitle="Tagihan periode − Tertagih periode"
+          hoverInfo={`Sisa tagihan bulan ini, sinkron dengan tab Keuntungan Harian.\nRumus: Tagihan periode − Tertagih periode\n  • Tagihan = SUM kupon (installment_coupons.amount) yang jatuh tempo bulan ini\n  • Tertagih = SUM pembayaran (payment_logs) yang masuk bulan ini\n\nKlik Detail untuk lihat per sales & per kontrak.`}
           onDetailClick={() => { setOutstandingDetailScope('monthly'); setOutstandingDetailOpen(true); }}
         />
 

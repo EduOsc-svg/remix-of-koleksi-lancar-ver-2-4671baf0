@@ -63,7 +63,7 @@ export const useContractStatusMap = () => {
 
       // 3. Status kontrak (untuk completed flag)
       const contracts = await fetchAll<{ id: string; status: string }>(
-        () => supabase.from('credit_contracts').select('id, status')
+        () => supabase.from('credit_contracts').select('id, status, created_at')
       );
 
       // Agregasi
@@ -84,7 +84,7 @@ export const useContractStatusMap = () => {
       }
 
       const map = new Map<string, ContractStatusInfo>();
-      for (const ct of contracts) {
+      for (const ct of contracts as Array<{ id: string; status: string; created_at?: string }>) {
         const unpaidInfo = unpaidByContract.get(ct.id) ?? { lateDays: 0, unpaidCount: 0 };
         const lastPay = lastPaymentByContract.get(ct.id) ?? null;
         const isCompleted = ct.status === 'completed' || unpaidInfo.unpaidCount === 0;
@@ -102,6 +102,9 @@ export const useContractStatusMap = () => {
           status: isCompleted ? 'completed' : ct.status,
           lateDays: unpaidInfo.lateDays,
           daysSinceLastPayment,
+          // PENTING: tanpa createdAt, aturan "belum pernah bayar & kontrak ≥ 6 hari → Macet"
+          // tidak akan trigger untuk kontrak baru yang belum ada payment_logs.
+          createdAt: ct.created_at,
         });
         map.set(ct.id, {
           status,

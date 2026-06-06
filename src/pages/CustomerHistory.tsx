@@ -31,7 +31,6 @@ import { TablePagination } from "@/components/TablePagination";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { differenceInDays } from "date-fns";
 import { 
-  calculateLateDays, 
   calculateDaysSinceLastPayment, 
   determineContractStatus,
   getStatusLabel,
@@ -50,12 +49,20 @@ export default function CustomerHistory() {
   const [selectedContractId, setSelectedContractId] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<ContractStatusFilter>('all');
 
-  // Helper: ambil status real-time, fallback ke heuristik bila map belum siap
+  // Helper: ambil status real-time dari statusMap (sumber kebenaran).
+  // Saat map belum siap, gunakan heuristik berbasis createdAt agar tidak
+  // salah label sebagai 'sangat_lancar'.
   const getStatus = (contract: { id: string; status: string; current_installment_index: number; created_at: string }): ContractStatus => {
     const info = statusMap?.get(contract.id);
     if (info) return info.status;
     if (contract.status === 'completed') return 'completed';
-    return 'sangat_lancar';
+    // Fallback aman: pakai aturan determineContractStatus dgn createdAt
+    return determineContractStatus({
+      status: contract.status,
+      lateDays: 0,
+      daysSinceLastPayment: 0,
+      createdAt: contract.created_at,
+    });
   };
 
   // Filter customers based on search term AND status filter

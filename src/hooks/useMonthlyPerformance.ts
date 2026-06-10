@@ -212,7 +212,13 @@ export const useMonthlyPerformance = (month: Date = new Date()) => {
         });
       }
       
-      const total_collected = total_tertagih_accrual;
+      // TERTAGIH bulanan — acuan: Total Tertagih pada Keuntungan Harian (Kalender Bulanan)
+      // Rumus: SUM(payment_logs.amount_paid WHERE payment_date di bulan ini)
+      // Konsisten dengan MonthlyProfitView.totalCollected.
+      const total_collected = (paymentsThisMonth || []).reduce(
+        (s, p: any) => s + Number(p.amount_paid || 0),
+        0
+      );
       const total_to_collect = total_sisa_tagihan_accrual;
       const profit_margin = total_modal > 0 ? (total_profit / total_modal) * 100 : 0;
 

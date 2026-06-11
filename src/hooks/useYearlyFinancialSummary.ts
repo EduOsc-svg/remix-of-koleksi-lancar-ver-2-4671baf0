@@ -260,11 +260,18 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
       });
 
       // TERTAGIH tahunan & per bulan — acuan: SUM Keuntungan Harian (payment_logs)
-      // Jumlahkan semua amount_paid dari payment_logs yang payment_date-nya di tahun ini,
-      // dialokasikan ke bulan berdasarkan payment_date (bukan start_date kontrak).
+      // TERTAGIH should only include payments for contracts that were created in the
+      // selected year (i.e. contracts list fetched above). Build a set of those
+      // contract IDs and only sum payments whose contract_id belongs to that set.
+      const contractIdsThisYear = new Set<string>((contracts || []).map((c: any) => c.id));
+
+      // Jumlahkan semua amount_paid dari payment_logs yang payment_date-nya di tahun ini
+      // dan alokasikan ke bulan berdasarkan payment_date (bukan start_date kontrak).
+      // Dengan demikian yearly `total_collected` akan sama dengan SUM dari setiap
+      // monthly breakdown `collected` (sinkron dengan card bulanan).
       (payments || []).forEach((p: any) => {
-        const amt = Number(p.amount_paid || 0);
         if (!p.payment_date) return;
+        const amt = Number(p.amount_paid || 0);
         totalCollected += amt;
         const mk = format(new Date(p.payment_date), 'yyyy-MM');
         const md = monthlyData.get(mk);
@@ -350,7 +357,6 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
 
       // SISA TAGIHAN tahunan — sum kupon UNPAID dari kontrak yg dibuat tahun ini
       // (konsisten dengan Sisa Tagihan bulanan: sum semua bulan dalam tahun).
-      const contractIdsThisYear = new Set<string>((contracts || []).map((c: any) => c.id));
       const totalToCollect = (allCoupons || []).reduce((s: number, c: any) => {
         if (c.status !== 'unpaid') return s;
         if (!contractIdsThisYear.has(c.contract_id)) return s;
@@ -361,7 +367,7 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
       const netProfit = totalProfit - totalCommission - totalExpenses;
       const netProfitPct = totalOmset > 0 ? (netProfit / totalOmset) * 100 : 0;
       const profitMargin = totalModal > 0 ? (totalProfit / totalModal) * 100 : 0;
-      const expectedTotal = totalToCollect + totalCollected;
+  const expectedTotal = totalToCollect + totalCollected;
       const collectionRate = expectedTotal > 0 ? (totalCollected / expectedTotal) * 100 : 0;
 
       // Agent results - BEST PRACTICE: Include all agents (even with 0 contracts in year)

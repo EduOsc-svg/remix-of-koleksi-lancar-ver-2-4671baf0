@@ -363,11 +363,15 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
         return s + Number(c.amount || 0);
       }, 0);
 
+      // TERTAGIH tahunan = gabungan (sum) dari Tertagih setiap bulan
+      // (identik dengan jumlah 12 card Tertagih bulanan di dashboard)
+      const totalCollected = Array.from(monthlyData.values()).reduce((s, m) => s + m.collected, 0);
+
       const totalProfit = totalOmset - totalModal;
       const netProfit = totalProfit - totalCommission - totalExpenses;
       const netProfitPct = totalOmset > 0 ? (netProfit / totalOmset) * 100 : 0;
       const profitMargin = totalModal > 0 ? (totalProfit / totalModal) * 100 : 0;
-  const expectedTotal = totalToCollect + totalCollected;
+      const expectedTotal = totalToCollect + totalCollected;
       const collectionRate = expectedTotal > 0 ? (totalCollected / expectedTotal) * 100 : 0;
 
       // Agent results - BEST PRACTICE: Include all agents (even with 0 contracts in year)

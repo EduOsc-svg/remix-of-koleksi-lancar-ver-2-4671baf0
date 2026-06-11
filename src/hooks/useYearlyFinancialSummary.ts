@@ -203,7 +203,6 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
       // Totals (CONTRACT BASIS untuk modal/omset/profit, CASH untuk collected)
       let totalModal = 0;
       let totalOmset = 0;
-      let totalCollected = 0;
       let totalExpenses = 0;
 
       const agentYearlyOmset = new Map<string, number>();

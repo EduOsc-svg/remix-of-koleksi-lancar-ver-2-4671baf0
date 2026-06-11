@@ -273,7 +273,6 @@ export const useYearlyFinancialSummary = (year: Date = new Date(), statusFilter:
       (payments || []).forEach((p: any) => {
         if (!p.payment_date) return;
         const amt = Number(p.amount_paid || 0);
-        totalCollected += amt;
         const mk = format(new Date(p.payment_date), 'yyyy-MM');
         const md = monthlyData.get(mk);
         if (md) md.collected += amt;
